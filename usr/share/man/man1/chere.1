@@ -1,0 +1,254 @@
+
+.TH chere 1 "October 2004" "User Commands"
+.SH NAME
+chere \- manage Shell Here context menu items
+.SH SYNOPSIS
+.B chere
+.RB \-<iulr>
+.RB [ \-lracnmpf12h ]
+.RB [ \-t
+.IR term ]
+.RB [ \-s
+.IR shell ]
+
+.SH DESCRIPTION
+.B chere
+adds the 
+.I term
+/
+.I shell
+combination to the folder context menu. This allows you to right click a folder in Windows Explorer and open
+.I shell
+in that folder.
+.PP
+Where possible, a login shell will be started. i.e. login scripts (
+.B /etc/profile, ~/profile, ~/.bash_profile, ~/.bash_login, /etc/csh.login, /etc/zprofile, $ZDOTDIR/.zprofile /etc/zlogin $ZDOTDIR/.zlogin
+) are run as appropriate for the shell. This does not apply to cmd, which does not have any login scripts.
+.PP
+The title of the window is not set. It will default to whatever the terminal sets it to. This can usually be controlled from the shell by passing an escape sequence to the shell.
+.SH OPTIONS
+.TP
+.B \-\^i
+Install
+.TP
+.B \-\^u
+Uninstall
+.TP
+.B \-\^l
+List currently installed Shell Here
+.TP
+.B \-\^r
+Read all
+.B chere
+registry entries to stdout
+.TP
+.B \-\^a
+Operation affects all users
+.TP
+.B \-\^c
+Operation affects current user only
+.TP
+.B \-\^n
+Be Nice and provide Control Panel uninstall option (Default)
+.TP
+.B \-\^m
+Minimal, no Control Panel uninstall
+.TP
+.B \-\^p
+Print
+.B regtool
+commands to stdout rather than running them
+.TP
+.B \-\^f
+Force write (overwrite existing, ignore missing files)
+.TP
+.B \-\^1
+Start shell using registry one-liners. This doesn\'t work with ash, tcsh or network shares.
+.TP
+.B \-\^2
+Start via
+.B bash
+script. Relies on windows to change directory, and login scripts avoiding doing a cd
+.B $HOME 
+.TP
+.B \-\^h
+Help
+.PP
+Supported terminals:
+.B cmd rxvt xterm
+.PP
+Supported shells:
+.B ash bash cmd pdksh tcsh zsh passwd
+
+.SH USAGE
+.PP
+A command (
+.B -iulr
+) must be specified before
+.B chere
+does anything. All other options modify how these commands work.
+.PP
+The
+.B -i
+(install) and
+.B -u
+(uninstall) commands are mutually exclusive. The
+.B -l
+and
+.B -r
+commands may be specified in addition to
+.B -i
+or
+.B -u
+, in which case the read/list is done after the install/uninstall.
+
+.PP
+The context menu may be (un)installed for all users
+.B \-\^a
+, or just yourself
+.B \-\^c.
+To (un)install for all users, you will require appropriate access rights. i.e. you need to have Administrator rights.
+
+.PP
+If the -i flag is passed without specifying a shell, the shell specified in
+.B /etc/passwd
+for the current user is added. If
+.B term
+is not specified,
+.B cmd
+is used.
+
+.PP
+If the
+.B -u
+flag is passed without specifying a shell, all installed context menus will be uninstalled. If
+.B -a
+or
+.B -c
+is also specified, only the context menus for the specified users are uninstalled. Otherwise the context menus are removed for all users and the current user.
+
+.PP
+It is not possible to uninstall a context menu for a user who is not the current user.
+
+.PP
+The 
+.B passwd
+shell tries to determine your preferred shell at runtime from your
+.B /etc/passwd
+entry. This is most useful on multi-user systems.
+
+.PP
+By default, registry entries are added so that the context menus can be removed using the Add Remove Programs utility in the Windows Control Panel. The
+.B -m
+option prevents this. Note that this uninstall option invokes
+.B chere.
+When installing for the current user,
+.B chere
+will attempt to set an uninstall entry. If the user does not have appropriate rights to add keys to the HKLM hive, then the uninstall will not be present. Using
+.B -m
+will avoid the error message.
+
+.PP
+The
+.B -1
+and
+.B -2
+options select how
+.B shell
+is started. The original method of registry one-liners is succint, but does not work on network shares or with
+.B ash
+and
+.B tcsh.
+It also results in an extra
+.B sh
+process when the
+.B passwd
+shell is used. These issues should not be present when invoked via
+.B xhere.
+.B xhere
+requires your login script to check the environment variable
+.B CHERE_INVOKING
+, and avoid changing to your
+.B HOME
+directory if it is present.
+
+.SH DEBUGGING
+Several options are present to aid debugging.
+
+.PP
+The
+.B -p
+option will print the
+.B regtool
+commands to
+.B stdout
+for inspection instead of executing them.
+
+.PP
+The
+.B -l
+command lists the currently installed shell here context menus.
+
+.PP
+The
+.B -r
+command lists the commands currently in the registry associated with all possible context menus.
+
+.PP
+The
+.B -f
+option forces
+.B chere
+to overwrite existing commands even if
+.I shell
+can\'t be found
+
+.SH EXAMPLES
+.IP
+\&./chere -il -t rxvt -s tcsh
+.PP
+Install 
+.B tcsh,
+for all users using
+.B rxvt
+as the terminal, then list what is installed.
+
+.SH HINTS
+If you are using
+.B cmd
+as a terminal because you don't want to install
+.B X
+consider using
+.B rxvt
+instead.
+.PP
+If you really do like
+.B cmd
+you can still use it as a shell in
+.B rxvt
+or
+.B xterm.
+.PP
+Use ~/.Xdefaults to set terminal resources (colour, font etc)
+.PP
+.B http://biocycle.atmos.colostate.edu/~johnk/Xterm-Title.html
+has information on setting up Dynamic titles from various shells
+
+.SH ENVIRONMENT
+.B CHERE_INVOKING
+
+.SH FILES
+.B /etc/passwd /bin/xhere /etc/profile ~/profile ~/.bash_profile ~/.bash_login /etc/csh.login /etc/zprofile $ZDOTDIR/.zprofile /etc/zlogin $ZDOTDIR/.zlogin
+
+.SH AUTHOR
+Written by Dave Kilroy <d_inabox@yahoo.com>
+
+.SH REPORTING BUGS
+Report bugs to <cygwin@cygwin.com>, following the directions in http://cygwin.com/problems.html. Also attach verbatim output of the command
+.I chere -r
+
+.SH COPYRIGHT
+This script is in the public domain.
+
+.SH SEE ALSO
+.B ash bash pdksh tcsh zsh rxvt xterm regtool
