@@ -402,12 +402,20 @@ if [ $ACTION = i ]; then
    CUR_KEY=$CUR_KEY/$elem
    if ! $REGTOOL_ check $CUR_KEY 2>/dev/null ; then
     # elem not present, so add it
-    $REGTOOL add $CUR_KEY
+    if ! $REGTOOL add $CUR_KEY ; then
+     echo $0 Error: Hive not writable
+     echo Aborting.
+     exit
+    fi
    fi
   done
 
   # Add Registry Key for Drives
-  $REGTOOL add $DRIVE_KEY/cygwin_$this_shell
+  if ! $REGTOOL add $DRIVE_KEY/cygwin_$this_shell ; then
+   echo $0 Error: Hive not writable
+   echo Aborting.
+   exit
+  fi
   $REGTOOL -s set $DRIVE_KEY/cygwin_$this_shell/ \"$ACCEL\"
   $REGTOOL add $DRIVE_KEY/cygwin_$this_shell/command
   $REGTOOL -s set $DRIVE_KEY/cygwin_$this_shell/command/ \"$START_CMD $SHELL_CMD\"
@@ -436,7 +444,12 @@ if [ $ACTION = i ]; then
   done
 
   # Add Registry Key for Directories/Folders
-  $REGTOOL add $DIR_KEY/cygwin_$this_shell
+  if ! $REGTOOL add $DIR_KEY/cygwin_$this_shell ; then
+   echo $0 Error: Hive not writable
+   echo Aborting.
+   exit
+  fi
+
   $REGTOOL -s set $DIR_KEY/cygwin_$this_shell/ \"$ACCEL\"
   $REGTOOL add $DIR_KEY/cygwin_$this_shell/command
   $REGTOOL -s set $DIR_KEY/cygwin_$this_shell/command/ \"$START_CMD $SHELL_CMD\"
