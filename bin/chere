@@ -1,27 +1,32 @@
 #!/bin/sh
 #
 # This shell script (un)installs Cygwin Prompt Here functionality.
-# Requires: regtool, uname, id, cygpath, getopt
+# Requires: regtool, uname, id, cygpath, getopt, bash
 # Optionally: sed
 #
 # TODO
 # ----
-# 1. Use run.exe to kick things off, eliminating the flashing window
-#	Will have to wait until run.exe is packaged [and not in X]
-# 2. When the runtime check is used, the initial sh stays in the background.
-#	Can't use exec to get rid of it. Can it be done?
+# 1. When the runtime check is used, the initial sh stays in the background.
+#	Can't use exec to get rid of it. Can it be done? Fixed with -2
+# 2. Use runas to make sure regtool has the right privileges?
+#	Will need to call myself with runas so the user only enters pwd once.
 #
 # KNOWN ERRORS
 #
-# On XP, I have seen the term/shell shutdown immediately (unless term set to cmd)
-# Prefixing the command with run.exe stopped this, but I don't know what was wrong
-# Tried several variants alleged to work with XP to no avail. Path issue?
-# Fixed in V0.3?
+# cmd and command cannot cd to network paths like \\server\share.
 #
 # Dave Kilroy
 # Oct 2004
 #
-VERSION=0.3
+VERSION=0.4
+#	Add r to synopsis
+#	Remove redundant TERM_CMDs and CYG_DIR
+#	Use run.exe if I can find it
+#	Add -1 and -2 options to determine how to start the shell. 2 is default
+#	-2 fixes reported issues with network paths and tcsh/ash login shells
+#		Thanks to Igor Petchanksi, Andrew Grimm, Munehiro (haro) Matsuda
+#	-2 untested on XP/NT/95/98/ME
+#VERSION=0.3
 #	Use forward slashes for command to fix XP problems (CGF)
 #	Correct quoting (CGF)
 #	Add -r option to read registry entries to stdout to help debugging
@@ -58,13 +63,14 @@ DO_WIN_UINST=t
 FORCE=f
 LIST=f
 READ=f
+METHOD=2
 
 # Default terminal and shell if not specified
 this_term=cmd
 #this_shell=passwd
 
 ####################### Parse command line #######################
-GETOPTED_ARGS=`getopt -u -o aciulrnmpfht:s: -- $*`
+GETOPTED_ARGS=`getopt -u -o aciulrnmpfh12t:s: -- $*`
 set -- $GETOPTED_ARGS
 for ARG; do
   case $ARG in
@@ -78,11 +84,13 @@ for ARG; do
     -t ) shift; this_term=$1; shift;;
     -s ) shift; this_shell=$1; shift;;
     -f ) shift; FORCE=t;;
+    -1 ) shift; METHOD=1;;
+    -2 ) shift; METHOD=2;;
     -h ) shift; cat <<-EOF
 	$0 version $VERSION
 
 	Usage:
-	$0 -<iul> [-aclnmfph] [-t <term>] [-s <shell>]
+	$0 -<iulr> [-aclrnmfph12] [-t <term>] [-s <shell>]
 
 	Adds the stated terminal/shell combination to the folder context menu
 	for all users. This allows you to right click a folder in Windows Explorer
@@ -112,16 +120,21 @@ for ARG; do
 	  f - Force write (overwrite existing, ignore missing files)
 	  p - Print regtool commands to stdout rather than running them
 	  r - Read all chere registry entries to stdout
+	  x - Run the command line
+	  1 - Use original method. This doesn\'t work with ash, tcsh or
+	      network shares.
+	  2 - Start via shell script. Relies on windows to change directory,
+	      and login scripts avoiding doing a cd $HOME 
 	  h - Help
 
-	Supported terminals:
-	$KNOWN_TERMS
+	  t <term> - Use terminal term. Supported terminals are:
+		$KNOWN_TERMS
 
-	Supported shells:
-	$KNOWN_SHELLS
+	  s <shell> - Use the named shell. Supported shells are:
+		$KNOWN_SHELLS
 
 	Note:
-	The 'passwd' shell tries to determine your preferred shell at runtime
+	The \'passwd\' shell tries to determine your preferred shell at runtime
 	from your passwd entry. This works for me, but consider it experimental.
 
 	Example:
@@ -138,7 +151,7 @@ for ARG; do
 
 	Use ~/.Xdefaults to set terminal resources (colour, font etc)
 	EOF
-	# Close '
+	# Close quote for syntax highlighting '
 	exit;;
   esac
 done
@@ -152,8 +165,26 @@ fi
 
 # Check windows version and cygwin install directory
 VER=`uname -s`
-CYG_DIR=`cygpath -w /`
 ID_USER=`id -nu`
+RUN_EXE=""
+ASH_EXE=`cygpath -w /bin/sh`
+BASH_EXE=`cygpath -w /bin/bash`
+
+if [ -x /bin/which ]; then
+ # Enable prepending of run.exe if we can find it.
+ # I'm assuming run has been placed in the path.
+ # We are doing this because run.exe is currently packaged in X-startup-scripts.
+ # It is also likely that many non-X users will have run available on their path.
+ # If and when run.exe migrates to cygutils, this will still work.
+ #
+ # However when that happens, anyone using the run command will need to rerun
+ # chere to pick up the new path to run.
+ RUN_EXE=`which run.exe 2>/dev/null`
+ if [ -n "$RUN_EXE" ]; then
+  # Convert to windows path
+  RUN_EXE=`cygpath -w "$RUN_EXE"`
+ fi
+fi
 
 # Check we have regtool (from cygwin package)
 if [ ! -x /bin/regtool ]; then
@@ -194,10 +225,8 @@ if [ $ACTION = i ]; then
   cmd )
 	case $VER in
 	CYGWIN_NT* )
-	 TERM_CMD=""
 	 TERM_EXE=cmd.exe;;
 	* )
-	 TERM_CMD=""
 	 TERM_EXE=command.com;;
 	esac;;
   rxvt )
@@ -327,18 +356,48 @@ if [ $ACTION = i ]; then
   fi
  fi
 
- # Transform TERM_EXE into windows paths (when not cmd) and append -e
- if [ $this_term != cmd ]; then
-  START_CMD="`cygpath -w \"$TERM_EXE\"` -e $SHELL_EXE"
- elif [ $this_shell != cmd ]; then
-  # With cmd (term), the shell executable needs to be converted to a windows path
-  # With cmd, we ignore TERM_CMD. For reference, note that windows does not cope
-  # with spaces at the start of a command in the registry. Starts complaining
-  # about missing files.
-  START_CMD=`cygpath -w "$SHELL_EXE"`
+ # TERM_EXE needs to be called by a windows path, even from run.exe
+ TERM_WIN_EXE=`cygpath -w "$TERM_EXE"`
+ echo method is $METHOD
+ if [ $METHOD = 1 ]; then
+  if [ $this_term != cmd ]; then
+   if [ -n "$RUN_EXE" ]; then
+    START_CMD="$RUN_EXE $TERM_WIN_EXE -e $SHELL_EXE"
+   else
+    START_CMD="$TERM_WIN_EXE -e $SHELL_EXE"
+   fi
+  elif [ $this_shell != cmd ]; then
+   # With cmd (term), the shell executable needs to be converted to a windows path
+   # With cmd, we ignore TERM_CMD.
+   START_CMD=`cygpath -w "$SHELL_EXE"`
+  else
+   # term and shell are cmd
+   START_CMD=$SHELL_EXE
+  fi
  else
-  # term and shell are cmd
-  START_CMD=$SHELL_EXE
+  # METHOD 2
+  XHERE="/bin/xhere"
+  SHELL_CMD=""
+  if [ $this_shell = cmd ]; then
+   # Clear XHERE for when running command from rxvt/xterm
+   XHERE="";
+  elif [ $this_shell = passwd ]; then
+   # Have XHERE do the call rather than bung it in the registry
+   SHELL_EXE="/etc/passwd"
+  fi
+  
+  if [ $this_term != cmd ]; then
+   if [ -n "$RUN_EXE" ]; then
+    START_CMD="$RUN_EXE $TERM_WIN_EXE -e $XHERE $SHELL_EXE"
+   else
+    START_CMD="$TERM_WIN_EXE -e $XHERE $SHELL_EXE"
+   fi
+  elif [ $this_shell != cmd ]; then
+   START_CMD="`cygpath -w \"$BASH_EXE\"` -c \\\"$XHERE $SHELL_EXE\\\""
+  else
+   # The command shell won't cd anywhere anyway
+   START_CMD=$SHELL_EXE
+  fi
  fi
 
  ####### Install ###########
@@ -373,7 +432,6 @@ if [ $ACTION = i ]; then
  if [ $DO_WIN_UINST = t ]; then
   # Add uninstall registry entry
   if [ $FORCE = t ] || ! $REGTOOL_ check $UINST_KEY/cygwin_$this_shell 2> /dev/null ; then
-   ASH_EXE=`cygpath -w /bin/sh`
    # Actually, should create an .inf so windows can get rid of the menu entries
    # even after the cygwin directory is wiped :(
    $REGTOOL add $UINST_KEY/cygwin_$this_shell
@@ -411,6 +469,9 @@ if [ $READ = t ]; then
  # Print some useful information
  echo OS is $VER
  echo chere version $VERSION
+ if [ -n "$RUN_EXE" ]; then
+  echo run.exe is available at $RUN_EXE
+ fi
  echo
  for shell in $KNOWN_SHELLS; do
   echo --- $shell keys ---
