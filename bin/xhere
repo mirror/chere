@@ -1,12 +1,15 @@
 #!/bin/bash
 # Have to use bash; can't get ash to "exec -l"
-# Spearate script from chere to avoid need for argument parsing
+# Separate script from chere to avoid need for argument parsing
 #
 # first arg is shell
 #
 # Dave Kilroy
 # Oct 2004
-VERSION=0.4
+VERSION=0.6
+# Fix a couple typos
+# Remove commented out commands
+#VERSION=0.4
 # First version, tied into chere version
 
 # Would have the second arg as a directory to cd to, but the directory
@@ -14,17 +17,15 @@ VERSION=0.4
 
 
 if [ -z $1 ]; then
- echo An argument is required, specifying the shell in invoke as a login shell
+ echo An argument is required, specifying the shell to invoke as a login shell
  exit
 elif [ $1 == -h ]; then
  echo This script is not intended to be invoked from the command line. Try chere -h
+ exit
 fi
 
 # Instead, just set a variable indicating to the login shells not to cd $HOME
 export CHERE_INVOKING=true
-
-# Environment variable to tell shell scripts where to go
-#export CHERE_DIR=`cygpath -u $2`
 
 if [ $1 = /etc/passwd ]; then
  user=`id -un`

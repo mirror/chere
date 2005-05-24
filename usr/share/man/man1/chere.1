@@ -170,7 +170,7 @@ requires your login script to check the environment variable
 .B CHERE_INVOKING
 , and avoid changing to your
 .B HOME
-directory if it is present.
+directory if it is present. The login script should unset the variable after it sees it, so that subsequent child logins are unaffected.
 
 .SH DEBUGGING
 Several options are present to aid debugging.
@@ -213,6 +213,22 @@ for all users using
 .B rxvt
 as the terminal, then list what is installed.
 
+.SH KNOWN BUGS
+If you have an old or custom startup script, the shell may not enter the desired directory. The login script modifications described above are provided in the default startup scripts; these may not replace your login scripts if they contain modifications. The default startup scripts can be found at:
+.PP
+.B /etc/defaults/etc/profile
+(provided by base-files, used by 
+.B ash,
+.B bash
+and
+.B pdksh)
+.PP
+.B /usr/share/doc/zsh-x.x.x/StartupFiles/zprofile
+(provided by zsh)
+.PP
+.B /usr/share/doc/tcsh-x.x.x/StartupFiles/csh.login
+(provided by tcsh)
+
 .SH HINTS
 If you are using
 .B cmd
@@ -229,7 +245,9 @@ you can still use it as a shell in
 or
 .B xterm.
 .PP
-Use ~/.Xdefaults to set terminal resources (colour, font etc)
+Use 
+.B ~/.Xdefaults
+to set terminal resources (colour, font etc)
 .PP
 .B http://biocycle.atmos.colostate.edu/~johnk/Xterm-Title.html
 has information on setting up Dynamic titles from various shells

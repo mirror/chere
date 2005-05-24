@@ -7,6 +7,7 @@
 # ----
 # 1. Use runas to make sure regtool has the right privileges when installing for all users
 #	Would need to call myself with runas so the user only enters pwd once.
+# 2. Add option to update all current entries
 #
 # KNOWN ERRORS
 #
