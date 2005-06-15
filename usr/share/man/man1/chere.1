@@ -1,11 +1,11 @@
 
-.TH chere 1 "October 2004" "User Commands"
+.TH chere 1 "June 2005" "User Commands"
 .SH NAME
 chere \- manage Shell Here context menu items
 .SH SYNOPSIS
 .B chere
-.RB \-<iulr>
-.RB [ \-lracnmpf12h ]
+.RB \-<iuxlrhv>
+.RB [ \-lracnmpf12 ]
 .RB [ \-t
 .IR term ]
 .RB [ \-s
@@ -33,6 +33,9 @@ Install
 .TP
 .B \-\^u
 Uninstall
+.TP
+.B \-\^x
+Refresh eXisting context menu items
 .TP
 .B \-\^l
 List currently installed Shell Here
@@ -73,6 +76,9 @@ script. Relies on windows to change directory, and login scripts avoiding doing 
 .TP
 .B \-\^h
 Help
+.TP
+.B \-\^v
+Version
 .PP
 Supported terminals:
 .B cmd rxvt xterm
@@ -83,7 +89,7 @@ Supported shells:
 .SH USAGE
 .PP
 A command (
-.B -iulr
+.B -iuxlrhv
 ) must be specified before
 .B chere
 does anything. All other options modify how these commands work.
@@ -98,9 +104,11 @@ and
 .B -r
 commands may be specified in addition to
 .B -i
-or
+,
 .B -u
-, in which case the read/list is done after the install/uninstall.
+or
+.B -x
+, in which case the read/list is done after the install/uninstall/refresh.
 
 .PP
 The context menu may be (un)installed for all users
@@ -155,7 +163,9 @@ and
 .B -2
 options select how
 .B shell
-is started. The original method of registry one-liners is succint, but does not work on network shares or with
+is started. The original method (
+.B -1
+) of registry one-liners is succint, but does not work on network shares or with
 .B ash
 and
 .B tcsh.
@@ -164,7 +174,10 @@ It also results in an extra
 process when the
 .B passwd
 shell is used. These issues should not be present when invoked via
-.B xhere.
+.B xhere
+(
+.B -2
+).
 .B xhere
 requires your login script to check the environment variable
 .B CHERE_INVOKING
@@ -214,7 +227,7 @@ for all users using
 as the terminal, then list what is installed.
 
 .SH KNOWN BUGS
-If you have an old or custom startup script, the shell may not enter the desired directory. The login script modifications described above are provided in the default startup scripts; these may not replace your login scripts if they contain modifications. The default startup scripts can be found at:
+If you have an old or custom startup script, the shell may not enter the desired directory. The login script modifications described above are provided in the default startup scripts; the cygwin setup program attempts to merge updates in these scripts to your local login scripts, but this may not work. The default startup scripts can be found at:
 .PP
 .B /etc/defaults/etc/profile
 (provided by base-files, used by 
@@ -226,8 +239,8 @@ and
 .B /usr/share/doc/zsh-x.x.x/StartupFiles/zprofile
 (provided by zsh)
 .PP
-.B /usr/share/doc/tcsh-x.x.x/StartupFiles/csh.login
-(provided by tcsh)
+.B /usr/share/doc/tcsh/...
+(not currently provided)
 
 .SH HINTS
 If you are using

@@ -7,18 +7,23 @@
 # ----
 # 1. Use runas to make sure regtool has the right privileges when installing for all users
 #	Would need to call myself with runas so the user only enters pwd once.
-# 2. Add option to update all current entries
+# 2. Warn if using -2 without appropriate login shell modifications.
 #
 # KNOWN ERRORS
 #
-# cmd and command cannot cd to network paths like \\server\share.
+# cmd and command terminals cannot cd to network paths like \\server\share.
 #
 # Dave Kilroy
-# Oct 2004
+# June 2005
 #
-VERSION=0.5
+VERSION=0.6
+#	Restructure to use shell functions
+#	Add version option
+#       Add -x option to update current entries
+#VERSION=0.5
 #	Add back -a and -c options to set options in HKCU
-#	Make sure the appropriate entries are uninstalled when run. Obey -a and -c options
+#	Make sure the appropriate entries are uninstalled when run.
+#	  (Obey -a and -c options)
 #	Note a user can't uninstall for another user
 #	Remove reference to -x that sneaked into help
 #	Rationalize help as chere now has a man page
@@ -28,9 +33,9 @@ VERSION=0.5
 #	Remove redundant TERM_CMDs and CYG_DIR
 #	Use run.exe if I can find it
 #	Add -1 and -2 options to determine how to start the shell. 2 is default
-#	-2 fixes reported issues with network paths and tcsh/ash login shells
-#		Thanks to Igor Petchanksi, Andrew Grimm, Munehiro (haro) Matsuda
-#	-2 untested on XP/NT/95/98/ME
+#	  -2 fixes reported issues with network paths and tcsh/ash login shells
+#	  Thanks to Igor Petchanksi, Andrew Grimm, Munehiro (haro) Matsuda
+#	  -2 untested on XP/NT/95/98/ME
 #VERSION=0.3
 #	Use forward slashes for command to fix XP problems (CGF)
 #	Correct quoting (CGF)
@@ -56,52 +61,19 @@ VERSION=0.5
 #	Possible quoting problems.
 #	Windows uninstall only posible if script present
 
-# Need to use eval to force correct quote evaluation
-REGTOOL="eval regtool"
-REGTOOL_=regtool
 
-KNOWN_TERMS="cmd rxvt xterm"
-KNOWN_SHELLS="ash bash cmd pdksh tcsh zsh passwd"
+#########################################################################
+#	Define functions (for modularity and readability)		#
+#########################################################################
 
-ALL_USERS=unset
-ACTION=nothing
-DO_WIN_UINST=t
-FORCE=f
-LIST=f
-READ=f
-METHOD=2
-PRINT=f
-# Used to set an extra argument for Control Panel uninstall for current user
-UINST_ARG=""
-
-# Default terminal and shell if not specified
-this_term=cmd
-#this_shell=passwd
-
-####################### Parse command line #######################
-GETOPTED_ARGS=`getopt -u -o iulracnmpf12ht:s: -- $*`
-set -- $GETOPTED_ARGS
-for ARG; do
-  case $ARG in
-    -i ) shift; ACTION=i;;
-    -u ) shift; ACTION=u;;
-    -l ) shift; LIST=t;;
-    -r ) shift; READ=t;;
-    -a ) shift; ALL_USERS=t;;
-    -c ) shift; ALL_USERS=f;;
-    -n ) shift; DO_WIN_UINST=t;;
-    -m ) shift; DO_WIN_UINST=f;;
-    -p ) shift; REGTOOL="echo regtool"; PRINT=t;;
-    -f ) shift; FORCE=t;;
-    -1 ) shift; METHOD=1;;
-    -2 ) shift; METHOD=2;;
-    -t ) shift; this_term=$1; shift;;
-    -s ) shift; this_shell=$1; shift;;
-    -h ) shift; cat <<-EOF
+# Prints usage information
+print_help()
+{
+ cat <<-EOF
 	$0 version $VERSION
 
 	Usage:
-	$0 -<iulr> [-lracnmpf12h] [-t <term>] [-s <shell>]
+	$0 -<iuxlrhv> [-lracnmpf12] [-t <term>] [-s <shell>]
 
 	Adds the stated terminal/shell combination to the folder context menu
 	This allows you to right click a folder in Windows Explorer and open
@@ -110,7 +82,8 @@ for ARG; do
 	Options:
 	  i - Install
 	  u - Uninstall
-	  l - List currently installed Shell Here
+	  x - Freshen eXisting entries
+	  l - List currently installed chere items
 	  r - Read all chere registry entries to stdout
 	  a - All users
 	  c - Current user only
@@ -123,6 +96,7 @@ for ARG; do
 	  2 - Start via bash script. Relies on windows to change directory,
 	      and login scripts avoiding doing a cd $HOME 
 	  h - Help
+	  v - Version
 
 	  t <term> - Use terminal term. Supported terminals are:
 		$KNOWN_TERMS
@@ -131,92 +105,189 @@ for ARG; do
 		$KNOWN_SHELLS
 
 	See the man page for more detail.
-	EOF
-	# Handle unclosed quote for syntax highlighting '
-	exit;;
-  esac
-done
+EOF
+    # Handle unclosed quote for syntax highlighting '
+}
 
-# Quick check of common utilities (from sh-utils, cygwin, textutils packages)
-if [ ! -x /bin/uname ] || [ ! -x /bin/cygpath ] || [ ! -x /bin/id ] || [ ! -x /bin/wc ] || [ ! -x /bin/sed ] ; then
- echo $0 Error: uname / id / cygpath / wc / sed not found
- echo These tools are required for correct operation. Aborting
- exit
-fi
-
-# Check windows version and cygwin install directory
-VER=`uname -s`
-ID_USER=`id -nu`
-RUN_EXE=""
-ASH_EXE=`cygpath -w /bin/sh`
-BASH_EXE=`cygpath -w /bin/bash`
-
-if [ -x /bin/which ]; then
- # Enable prepending of run.exe if we can find it.
- # I'm assuming run has been placed in the path.
- # We are doing this because run.exe is currently packaged in X-startup-scripts.
- # It is also likely that many non-X users will have run available on their path.
- # If and when run.exe migrates to cygutils, this will still work.
- #
- # However when that happens, anyone using the run command will need to rerun
- # chere to pick up the new path to run.
- RUN_EXE=`which run.exe 2>/dev/null`
- if [ -n "$RUN_EXE" ]; then
-  # Convert to windows path
-  RUN_EXE=`cygpath -w "$RUN_EXE"`
+# Function to verify all required utilies are present
+# Notes:
+#  Exits if any required utilites are missing
+check_requirements()
+{
+ # Quick check of common utilities (from sh-utils, cygwin, textutils packages)
+ if [ ! -x /bin/uname ] || [ ! -x /bin/cygpath ] || [ ! -x /bin/id ] || [ ! -x /bin/wc ] || [ ! -x /bin/sed ] ; then
+  echo $0 Error: uname / id / cygpath / wc / sed not found
+  echo These tools are required for correct operation. Aborting
+  exit
  fi
-fi
 
-# Check we have regtool (from cygwin package)
-if [ ! -x /bin/regtool ]; then
- echo $0 Error: /bin/regtool not found
- echo
- echo You need regtool installed for this script to work.
- echo Aborting.
- exit
-fi
+ # Check we have regtool (from cygwin package)
+ if [ ! -x /bin/regtool ]; then
+  echo $0 Error: /bin/regtool not found
+  echo
+  echo You need regtool installed for this script to work.
+  echo Aborting.
+  exit
+ fi
 
-# Identify the registry keys for each OS and desired set of users
-# Same for all?
-# Note that the entry /HKCU/Software/Classes may not exist, and may need
-# to be created for the user.
-DIR_KEY_CR=/HKCR/Directory/Shell
-DRIVE_KEY_CR=/HKCR/Drive/Shell
-DIR_KEY_CU=/HKCU/Software/Classes/Directory/Shell
-DRIVE_KEY_CU=/HKCU/Software/Classes/Drive/Shell
-UINST_KEY=/HKLM/Software/Microsoft/Windows/CurrentVersion/Uninstall
-# Should also check if regtool will write
-if [ $ALL_USERS = f ]; then
- DIR_KEY=$DIR_KEY_CU
- DRIVE_KEY=$DRIVE_KEY_CU
- UINST_ARG="-c"
-else
- # all users is the default
- DIR_KEY=$DIR_KEY_CR
- DRIVE_KEY=$DRIVE_KEY_CR
-fi
+}
 
-if [ $ACTION = i ]; then
+# Get information about the current system
+# Sets:
+#  VER - system version
+#  ID_USER - username
+#  RUN_EXE - windows path to run.exe if present
+#  ASH_EXE - windows path to ash if present
+#  BASH_EXE - windows path to bash if present
+#  DIR_KEY_CU - Registry key for directory context menu for current user
+#  DRIVE_KEY_CU - Registry key for drive context menu for current user
+#  DIR_KEY_CR - Registry key for directory context menu for all users
+#  DRIVE_KEY_CR - Registry key for drive context menu for all users
+#  UINST_KEY - Registry key for uninstall information
+get_system_info()
+{
+ # Check windows version and cygwin install directory
+ VER=`uname -s`
+ ID_USER=`id -nu`
+ RUN_EXE=""
+ ASH_EXE=`cygpath -w /bin/sh`
+ BASH_EXE=`cygpath -w /bin/bash`
 
- # If no shell specified at this stage, grab one from /etc/passwd if it is present
- if [ ! $this_shell ]; then
-  if [ -f /etc/passwd ]; then
-   this_shell=`sed -n "s?$ID_USER:.*:/bin/\(.*\)?\1?gp" /etc/passwd`
-   echo Shell defaulting to $this_shell defined for $ID_USER
-  else
-   echo $0 Error: No shell specified, and /etc/passwd not present
-   echo
-   echo Can\'t guess what shell you want.
-   echo Use -s to specify the shell.
-   exit
+ if [ -x /bin/which ]; then
+  # Enable prepending of run.exe if we can find it.
+  # I'm assuming run has been placed in the path.
+  # We are doing this because run.exe is currently packaged in X-startup-scripts.
+  # It is also likely that many non-X users will have run available on their path.
+  # If and when run.exe migrates to cygutils, this will still work.
+  #
+  # However when that happens, anyone using the run command will need to rerun
+  # chere to pick up the new path to run.
+  RUN_EXE=`which run.exe 2>/dev/null`
+  if [ -n "$RUN_EXE" ]; then
+   # Convert to windows path
+   RUN_EXE=`cygpath -w "$RUN_EXE"`
   fi
  fi
 
+ # Identify the registry keys for each OS and desired set of users
+ # Same for all?
+ # Note that the entry /HKCU/Software/Classes may not exist, and may need
+ # to be created for the user.
+ DIR_KEY_CR=/HKCR/Directory/Shell
+ DRIVE_KEY_CR=/HKCR/Drive/Shell
+ DIR_KEY_CU=/HKCU/Software/Classes/Directory/Shell
+ DRIVE_KEY_CU=/HKCU/Software/Classes/Drive/Shell
+ UINST_KEY=/HKLM/Software/Microsoft/Windows/CurrentVersion/Uninstall
+}
+
+# Selects the registry entries to use based on action and user.
+# Arguments:
+#  $1 - Action. If install output keys to install for. Otherwise keys to remove
+#  $2 - If TRUE (not f), set for all users.
+#       Otherwise, set for current user.
+# Sets:
+#  DIR_KEY - Registry key for directory context menu
+#  DRIVE_KEY - Registry key for drive context menu
+#  DIR_KEYS - Registry keys to be removed (directory)
+#  DRIVE_KEYS - Registry keys to be removed (drive)
+#  UINST_ARG - Argument to pass to chere on uninstall
+# Refers to:
+#  DIR_KEY_CU - Registry key for directory context menu for current user
+#  DRIVE_KEY_CU - Registry key for drive context menu for current user
+#  DIR_KEY_CR - Registry key for directory context menu for all users
+#  DRIVE_KEY_CR - Registry key for drive context menu for all users
+set_for_user()
+{
+ if [ $1 = i ]; then
+  # Set for install
+  if [ $2 = f ]; then
+   DIR_KEY=$DIR_KEY_CU
+   DRIVE_KEY=$DRIVE_KEY_CU
+   UINST_ARG="-c"
+  else
+   # all users is the default
+   DIR_KEY=$DIR_KEY_CR
+   DRIVE_KEY=$DRIVE_KEY_CR
+  fi
+ else
+  # Set for uninstall
+  if [ $2 = t ]; then
+   # Don't remove HKCU entries
+   DRIVE_KEYS=$DRIVE_KEY_CR
+   DIR_KEYS=$DIR_KEY_CR
+  elif [ $2 = f ]; then
+   # Don't remove HKCR entries
+   DRIVE_KEYS=$DRIVE_KEY_CU
+   DIR_KEYS=$DIR_KEY_CU
+  else
+   # Else remove both HKCR and HKCU entries
+   DRIVE_KEYS="$DRIVE_KEY_CR $DRIVE_KEY_CU"
+   DIR_KEYS="$DIR_KEY_CR $DIR_KEY_CU"
+  fi
+ fi
+}
+
+# Sets this_shell, based on current users passwd entry
+# Sets:
+#  this_shell - shell to install
+# Uses:
+#  ID_USER - current user
+# Notes:
+#  Exits if /etc/passwd not found
+get_shell_from_pwd()
+{
+ if [ -f /etc/passwd ]; then
+  this_shell=`sed -n "s?$ID_USER:.*:/bin/\(.*\)?\1?gp" /etc/passwd`
+  echo Shell defaulting to $this_shell defined for $ID_USER
+ else
+  echo $0 Error: No shell specified, and /etc/passwd not present
+  echo
+  echo Can\'t guess what shell you want.
+  echo Use -s to specify the shell.
+  exit
+ fi
+}
+
+# Identifies the terminal installed for the named shell
+# Parameters:
+#  $1 - shell
+# Uses:
+#  DIR_KEY - Registry base to find shell entry
+find_term_of_installed_shell()
+{
+# local KEY_VALUE
+
+ # first sed strips the RUN executable
+ # second strips arguments passed to xterm/rxvt (including the shell)
+ # third strips arguments passed to cmd/command
+ # fourth trims the path to the term
+ # fifth eliminates the extension
+ KEY_VALUE=`$REGTOOL_ get $DIR_KEY/cygwin_$1/command/ | sed "s/.*run\.exe//g"  | sed "s/-e.*//g" | sed "s?/k.*??g" | sed "s?.*[\\]??g" | sed "s/\.exe//g"`
+
+ if [ $KEY_VALUE = command ]; then
+  KEY_VALUE=cmd
+ fi
+ echo $KEY_VALUE
+ unset $KEY_VALUE
+}
+
+# Setup to install for a particular terminal
+# Arguments:
+#  $1 - term to setup for
+# Sets:
+#  TERM_EXE - path to terminals executable
+# Uses:
+#  VER - OS version
+#  KNOWN_TERMS - list of known terminals
+# Notes:
+#  Exits if term is not recognised
+setup_for_term()
+{
  #################### Define terminals ########################
  # For each terminal, indicate the executable in TERM_EXE.
  # Unless it is cmd, it is assumed that -e passes the startup
  # command
- case $this_term in
+ case $1 in
   cmd )
 	case $VER in
 	CYGWIN_NT* )
@@ -237,14 +308,34 @@ if [ $ACTION = i ]; then
 	echo Use -h for help
 	exit;;
  esac
+}
 
+# Setup to install a particular shell.
+# Arguments:
+#  $1 - shell to install
+# Sets:
+#  SHELL_EXE - path to shell executable
+#  SHELL_CMD - argument to pass to shell executable (Method 1 only)
+#  ACCEL - context menu text
+#  CPH_DESC - description for uninstall
+# Uses:
+#  VER - OS version
+#  FORCE - set to t to force installation of passwd in its absence
+#  KNOWN_SHELLS - list of known shells
+#
+# Notes:
+#  If shell is passwd, checks for the presence of /etc/passwd
+#  Exits if shell is passwd, /etc/passwd not found and FORCE is not t.
+#  Exits if shell is not recognised
+setup_for_shell()
+{
  #################### Define shells #############################
  # For each shell, specify:
- # the command that should be used to start it in the directory %1, and keep it open.
  # the location of the executable to be checked on install
+ # the arguments that should be used to start it in the directory %1, and keep it open.
  # the accelerator to be displayed on the menu
  # the description text to be displayed in control panel uninstall window
- case $this_shell in
+ case $1 in
   bash )
 	SHELL_EXE="/bin/bash.exe"
 	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
@@ -326,42 +417,37 @@ if [ $ACTION = i ]; then
 	echo Use -h for help
 	exit;;
  esac
+}
 
- # Check TERM and SHELL are present
- if [ ! -x "$TERM_EXE" ] && [ "$this_term" != cmd ]; then
-  if [ $FORCE = t ]; then
-   echo $0 Warning: $TERM_EXE not found
-  else
-   echo $0 Error: $TERM_EXE not found
-   echo
-   echo $TERM_EXE is where I expect to find your $this_term
-   echo Use -f to install anyway.
-   exit
-  fi
- fi
- if [ ! -x "$SHELL_EXE" ] && [ "$this_shell" != cmd ]; then
-  if [ $FORCE = t ]; then
-   echo $0 Warning: $SHELL_EXE not found
-  else
-   echo $0 Error: $SHELL_EXE not found
-   echo
-   echo $SHELL_EXE is where I expect to find $this_shell
-   echo Use -f to install anyway.
-   exit
-  fi
- fi
-
+# Builds the command to execute when the context menu item is selected
+# Arguments:
+#  $1 - Terminal to use
+#  $2 - Shell to install
+#  $3 - Method used to invoke term/shell combo
+# Sets:
+#  START_CMD - command to execute
+#  SHELL_EXE - modified if this_shell is passwd and using method 2
+#  SHELL_CMD - cleared if using method 2
+# Uses:
+#  RUN_EXE - location of run.exe if present
+#  TERM_EXE - location of terminal executable
+#  SHELL_EXE - location of shell executable
+build_start_cmd()
+{
+# local TERM_WIN_EXE XHERE
  # TERM_EXE needs to be called by a windows path, even from run.exe
  TERM_WIN_EXE=`cygpath -w "$TERM_EXE"`
- if [ $METHOD = 1 ]; then
-  if [ $this_term != cmd ]; then
+ if [ $3 = 1 ]; then
+  # METHOD 1 - invoke term and shell directly from the registry
+  if [ $1 != cmd ]; then
    if [ -n "$RUN_EXE" ]; then
     START_CMD="$RUN_EXE $TERM_WIN_EXE -e $SHELL_EXE"
    else
     START_CMD="$TERM_WIN_EXE -e $SHELL_EXE"
    fi
-  elif [ $this_shell != cmd ]; then
-   # With cmd (term), the shell executable needs to be converted to a windows path
+  elif [ $2 != cmd ]; then
+   # With cmd (term), the shell executable needs to be converted
+   # to a windows path
    # With cmd, we ignore TERM_CMD.
    START_CMD=`cygpath -w "$SHELL_EXE"`
   else
@@ -369,35 +455,46 @@ if [ $ACTION = i ]; then
    START_CMD=$SHELL_EXE
   fi
  else
-  # METHOD 2
+  # METHOD 2 - invoke xhere from the registry
   XHERE="/bin/xhere"
-  SHELL_CMD=""
-  if [ $this_shell = cmd ]; then
+  if [ $2 = cmd ]; then
    # Clear XHERE for when running command from rxvt/xterm
    XHERE="";
-  elif [ $this_shell = passwd ]; then
+  elif [ $2 = passwd ]; then
    # Have XHERE do the call rather than bung it in the registry
    SHELL_EXE="/etc/passwd"
   fi
-  
-  if [ $this_term != cmd ]; then
+
+  if [ $1 != cmd ]; then
    if [ -n "$RUN_EXE" ]; then
     START_CMD="$RUN_EXE $TERM_WIN_EXE -e $XHERE $SHELL_EXE"
    else
     START_CMD="$TERM_WIN_EXE -e $XHERE $SHELL_EXE"
    fi
-  elif [ $this_shell != cmd ]; then
-   START_CMD="`cygpath -w \"$BASH_EXE\"` -c \\\"$XHERE $SHELL_EXE\\\""
+   if [ $2 != cmd ]; then
+    SHELL_CMD="\\\"%L\\\""
+   fi
+  elif [ $2 != cmd ]; then
+   START_CMD="`cygpath -w \"$BASH_EXE\"`"
+   SHELL_CMD="-c \\\"$XHERE $SHELL_EXE '%L'\\\""
   else
    # The command shell won't cd anywhere anyway
    START_CMD=$SHELL_EXE
   fi
+  unset XHERE
  fi
+ unset TERM_WIN_EXE
+}
 
- ####### Install ###########
- if [ $FORCE = t ] || ! $REGTOOL_ check $DRIVE_KEY/cygwin_$this_shell 2> /dev/null ; then
-  # Make sure the KEY exists
-  KEY_ELEMENTS=`echo $DRIVE_KEY | sed "s?/? ?g"`
+# Create full path to registry key
+# Arguments:
+#  $1 - Registry key to create
+# Notes:
+#  Exits if key cannot be created
+create_registry_key()
+{
+# local KEY_ELEMENTS CUR_KEY
+  KEY_ELEMENTS=`echo $1 | sed "s?/? ?g"`
   CUR_KEY=
   for elem in $KEY_ELEMENTS; do
    CUR_KEY=$CUR_KEY/$elem
@@ -410,156 +507,40 @@ if [ $ACTION = i ]; then
     fi
    fi
   done
+  unset KEY_ELEMENTS CUR_KEY
+}
 
-  # Add Registry Key for Drives
-  if ! $REGTOOL add $DRIVE_KEY/cygwin_$this_shell ; then
-   echo $0 Error: Hive not writable
-   echo Aborting.
-   exit
-  fi
-  $REGTOOL -s set $DRIVE_KEY/cygwin_$this_shell/ \"$ACCEL\"
-  $REGTOOL add $DRIVE_KEY/cygwin_$this_shell/command
-  $REGTOOL -s set $DRIVE_KEY/cygwin_$this_shell/command/ \"$START_CMD $SHELL_CMD\"
- else
-  echo $0 Warning: Not overriding existing entry
-  echo
-  echo Entry for $this_shell already exists in the Registry Drive Key
-  echo Use -f to override existing key.
-  echo
- fi
-
- if [ $FORCE = t ] || ! $REGTOOL_ check $DIR_KEY/cygwin_$this_shell 2> /dev/null; then
-  # Make sure the KEY exists
-  KEY_ELEMENTS=`echo $DIR_KEY | sed "s?/? ?g"`
-  CUR_KEY=
-  for elem in $KEY_ELEMENTS; do
-   CUR_KEY=$CUR_KEY/$elem
-   if ! $REGTOOL_ check $CUR_KEY 2>/dev/null ; then
-    # elem not present, so add it
-    if ! $REGTOOL add $CUR_KEY ; then
-     echo $0 Error: Hive not writable
-     echo Aborting.
-     exit
-    fi
+# Removes a key and any empty parents
+#  $1 - key to remove
+remove_registry_key()
+{
+# local CUR_KEY ENTRIES
+ CUR_KEY=$1
+ if $REGTOOL_ check $CUR_KEY 2> /dev/null; then
+  while [ -n "$CUR_KEY" ]; do
+   ENTRIES=`$REGTOOL_ list $CUR_KEY | wc -l`
+   if [ $ENTRIES = "0" ] || ( [ $ENTRIES = "1" ] && [ $PRINT = t ] ); then
+    # Remove empty key
+    $REGTOOL remove $CUR_KEY
    fi
+   CUR_KEY=`echo $CUR_KEY | sed "s?/[^/]*\\$??g"`
   done
-
-  # Add Registry Key for Directories/Folders
-  if ! $REGTOOL add $DIR_KEY/cygwin_$this_shell ; then
-   echo $0 Error: Hive not writable
-   echo Aborting.
-   exit
-  fi
-
-  $REGTOOL -s set $DIR_KEY/cygwin_$this_shell/ \"$ACCEL\"
-  $REGTOOL add $DIR_KEY/cygwin_$this_shell/command
-  $REGTOOL -s set $DIR_KEY/cygwin_$this_shell/command/ \"$START_CMD $SHELL_CMD\"
- else
-  echo $0 Warning: Not overriding existing entry
-  echo
-  echo Entry for $this_shell already exists in the Registry Directory Key
-  echo Use -f to override existing key.
-  echo
  fi
+ unset CUR_KEY ENTRIES
+}
 
- if [ $DO_WIN_UINST = t ]; then
-  # Add uninstall registry entry
-  if [ $FORCE = t ] || ! $REGTOOL_ check $UINST_KEY/cygwin_$this_shell 2> /dev/null ; then
-   # Actually, should create an .inf so windows can get rid of the menu entries
-   # even after the cygwin directory is wiped :(
-   if $REGTOOL add $UINST_KEY/cygwin_$this_shell ; then
-    $REGTOOL -s set $UINST_KEY/cygwin_$this_shell/DisplayName \"$CPH_DESC\"
-    $REGTOOL -s set $UINST_KEY/cygwin_$this_shell/UnInstallString \"$ASH_EXE -c \\\"/bin/chere $UINST_ARG -u -s $this_shell\\\"\"
-   else
-    echo $0 Error: Couldn\'t modify HKLM hive.
-    echo Control Panel uninstall will not be available.
-   fi
-  else
-   echo $0 Warning: Not overriding existing entry
-   echo
-   echo Entry for $this_shell already exists in the Registry uninstall section
-   echo Use -f to override existing key.
-   echo
-  fi
- fi
-elif [ $ACTION = u ]; then
-###### UnInstall ##########
- if [ $ALL_USERS = t ]; then
-  # Don't remove HKCU entries
-  DRIVE_KEYS=$DRIVE_KEY_CR
-  DIR_KEYS=$DIR_KEY_CR
- elif [ $ALL_USERS = f ]; then
-  # Don't remove HKCR entries
-  DRIVE_KEYS=$DRIVE_KEY_CU
-  DIR_KEYS=$DIR_KEY_CU
- else
-  # Else remove both HKCR and HKCU entries
-  DRIVE_KEYS="$DRIVE_KEY_CR $DRIVE_KEY_CU"
-  DIR_KEYS="$DIR_KEY_CR $DIR_KEY_CU"
- fi
-
- if [ -z "$this_shell" ]; then
-  # No shell specified, remove all
-  UINST_SHELLS=$KNOWN_SHELLS
- else
-  UINST_SHELLS=$this_shell
- fi
-
- for ushell in $UINST_SHELLS ; do
-  for drive in $DRIVE_KEYS ; do
-   # Check each key exists before attempting to remove it
-   if $REGTOOL_ check $drive/cygwin_$ushell/command 2> /dev/null; then
-    if ! $REGTOOL remove $drive/cygwin_$ushell/command ; then
-     echo $0 Error: Hive not writable.
-     echo Aborting.
-     exit
-    fi
-   fi
-
-   if $REGTOOL_ check $drive/cygwin_$ushell 2> /dev/null; then
-    $REGTOOL remove $drive/cygwin_$ushell
-   fi
-  done
-
-  for dir in $DIR_KEYS ; do
-   if $REGTOOL_ check $dir/cygwin_$ushell/command 2> /dev/null; then
-    $REGTOOL remove $dir/cygwin_$ushell/command
-   fi
-   if $REGTOOL_ check $dir/cygwin_$ushell 2> /dev/null; then
-    $REGTOOL remove $dir/cygwin_$ushell
-   fi
-  done
-
-  if $REGTOOL_ check $UINST_KEY/cygwin_$ushell 2> /dev/null; then
-   $REGTOOL remove $UINST_KEY/cygwin_$ushell
-  fi
- done # shell
-
- for key in $DRIVE_KEYS $DIR_KEYS ; do
-   # Make sure empty KEYs are removed after we've cleared out our entries
-   CUR_KEY=$key
-   if $REGTOOL_ check $CUR_KEY 2> /dev/null; then
-    while [ -n "$CUR_KEY" ]; do
-     ENTRIES=`$REGTOOL_ list $CUR_KEY | wc -l`
-     if [ $ENTRIES = "0" ] || ( [ $ENTRIES = "1" ] && [ $PRINT = t ] ); then
-      # Remove empty key
-      $REGTOOL remove $CUR_KEY
-     fi
-     CUR_KEY=`echo $CUR_KEY | sed "s?/[^/]*\\$??g"`
-    done
-   fi
- done
-
-fi
-
-if [ $READ = t ]; then
- # Print some useful information
- echo OS is $VER
- echo chere version $VERSION
- if [ -n "$RUN_EXE" ]; then
-  echo run.exe is available at $RUN_EXE
- fi
- echo
+# Print registry keys and values that chere knows about
+# Uses:
+#  KNOWN_SHELLS - list of known shells
+#  DIR_KEY_CU - Registry key for directory context menu for current user
+#  DRIVE_KEY_CU - Registry key for drive context menu for current user
+#  DIR_KEY_CR - Registry key for directory context menu for all users
+#  DRIVE_KEY_CR - Registry key for drive context menu for all users
+#  UINST_KEY - Registry key for uninstall information
+read_chere_registry_keys()
+{
+# local builtin is not available for sh (but is for ash and bash)
+# local FOR_WHO=""
  for shell in $KNOWN_SHELLS; do
   echo --- $shell keys ---
   #### Directory entries ####
@@ -603,6 +584,280 @@ if [ $READ = t ]; then
   fi
   echo
  done
+ # Since local is not available...
+ unset FOR_WHO
+}
+
+# Lists all cygwin items in given registry node to stdout
+# Parameters:
+#  $1 - Node to search
+list_cygwin_registry_keys()
+{
+  $REGTOOL_ list $1 2> /dev/null | sed -n 's/cygwin_\(.*\)/\1/gp'
+}
+
+# Install keys under $1 for shell $2
+# Arguments:
+#  $1 - Registry key to create
+#  $2 - Shell being installed
+# Uses:
+#  FORCE
+#  ACCEL
+#  START_CMD
+#  SHELL_CMD
+install_context_menu()
+{
+ if [ $FORCE = t ] || ! $REGTOOL_ check $1 2> /dev/null ; then
+  # Make sure the registry key exists
+  create_registry_key "$1"
+
+  $REGTOOL -s set $1/ \"$ACCEL\"
+  $REGTOOL add $1/command
+  $REGTOOL -s set $1/command/ \"$START_CMD $SHELL_CMD\"
+ else
+  echo $0 Warning: Not overriding existing entry
+  echo
+  echo Entry for $2 already exists in the Registry Drive Key
+  echo Use -f to override existing key.
+  echo
+ fi
+}
+
+# Create uninstall entries
+# Arguments:
+#  $1 - Registry key to create
+#  $2 - Shell being installed
+# Uses:
+#  FORCE
+#  CPH_DESC
+#  ASH_EXE
+#  UINST_ARG
+create_uninstall_item()
+{
+ # Add uninstall registry entry
+ if [ $FORCE = t ] || ! $REGTOOL_ check $1 2> /dev/null ; then
+  # Actually, should create an .inf so windows can get rid of the menu entries
+  # even after the cygwin directory is wiped :(
+  if $REGTOOL add $1 ; then
+   $REGTOOL -s set $1/DisplayName \"$CPH_DESC\"
+   $REGTOOL -s set $1/UnInstallString \"$ASH_EXE -c \\\"/bin/chere $UINST_ARG -u -s $2\\\"\"
+  else
+   echo $0 Error: Couldn\'t modify HKLM hive.
+   echo Control Panel uninstall will not be available.
+  fi
+ else
+  echo $0 Warning: Not overriding existing entry
+  echo
+  echo Entry for $2 already exists in the Registry uninstall section
+  echo Use -f to override existing key.
+  echo
+ fi
+}
+
+# Install named term and shell combination
+# Arguments:
+#  $1 - Terminal to install
+#  $2 - Shell to install
+# Uses:
+#  FORCE
+#  DO_WIN_UINST
+#  DRIVE_KEY
+#  DIR_KEY
+#  UINST_KEY
+install()
+{
+# local TERM_EXE SHELL_EXE SHELL_CMD START_CMD ACCEL CPH_DESC UINST_ARG
+ setup_for_term  $1
+ setup_for_shell $2
+
+ # Check TERM and SHELL are present
+ if [ ! -x "$TERM_EXE" ] && [ "$1" != cmd ]; then
+  if [ $FORCE = t ]; then
+   echo $0 Warning: $TERM_EXE not found
+  else
+   echo $0 Error: $TERM_EXE not found
+   echo
+   echo $TERM_EXE is where I expect to find your $1
+   echo Use -f to install anyway.
+   exit
+  fi
+ fi
+ if [ ! -x "$SHELL_EXE" ] && [ "$2" != cmd ]; then
+  if [ $FORCE = t ]; then
+   echo $0 Warning: $SHELL_EXE not found
+  else
+   echo $0 Error: $SHELL_EXE not found
+   echo
+   echo $SHELL_EXE is where I expect to find $2
+   echo Use -f to install anyway.
+   exit
+  fi
+ fi
+
+ build_start_cmd $1 $2 $METHOD
+
+ ####### Install ###########
+ install_context_menu $DRIVE_KEY/cygwin_$2 $2
+ install_context_menu $DIR_KEY/cygwin_$2 $2
+
+ if [ $DO_WIN_UINST = t ]; then
+  create_uninstall_item $UINST_KEY/cygwin_$2 $2
+ fi
+
+ unset TERM_EXE SHELL_EXE SHELL_CMD START_CMD ACCEL CPH_DESC UINST_ARG
+}
+
+# Arguments
+#  $1 - shell
+# Uses:
+#  DRIVE_KEYS
+#  DIR_KEYS
+#  UINST_KEY
+uninstall()
+{
+ for drive in $DRIVE_KEYS ; do
+  # Check each key exists before attempting to remove it
+  if $REGTOOL_ check $drive/cygwin_$1/command 2> /dev/null; then
+   if ! $REGTOOL remove $drive/cygwin_$1/command ; then
+    echo $0 Error: Hive not writable.
+    echo Aborting.
+    exit
+   fi
+  fi
+
+  if $REGTOOL_ check $drive/cygwin_$1 2> /dev/null; then
+   $REGTOOL remove $drive/cygwin_$1
+  fi
+ done
+
+ for dir in $DIR_KEYS ; do
+  if $REGTOOL_ check $dir/cygwin_$1/command 2> /dev/null; then
+   $REGTOOL remove $dir/cygwin_$1/command
+  fi
+  if $REGTOOL_ check $dir/cygwin_$1 2> /dev/null; then
+   $REGTOOL remove $dir/cygwin_$1
+  fi
+ done
+
+ if $REGTOOL_ check $UINST_KEY/cygwin_$1 2> /dev/null; then
+  $REGTOOL remove $UINST_KEY/cygwin_$1
+ fi
+}
+
+#########################################################################
+#	Start of commands						#
+#########################################################################
+
+# Need to use eval to force correct quote evaluation
+REGTOOL="eval regtool"
+REGTOOL_=regtool
+
+KNOWN_TERMS="cmd rxvt xterm"
+KNOWN_SHELLS="ash bash cmd pdksh tcsh zsh passwd"
+
+ALL_USERS=unset
+ACTION=nothing
+FRESHEN=f
+DO_WIN_UINST=t
+FORCE=f
+LIST=f
+READ=f
+METHOD=2
+PRINT=f
+# Used to set an extra argument for Control Panel uninstall for current user
+UINST_ARG=""
+
+# Default terminal and shell if not specified
+this_term=cmd
+#this_shell=passwd
+
+####################### Parse command line #######################
+GETOPTED_ARGS=`getopt -u -o iuxlracnmpf12hvt:s: -- $*`
+set -- $GETOPTED_ARGS
+for ARG; do
+  case $ARG in
+    -i ) shift; ACTION=i;;
+    -u ) shift; ACTION=u;;
+    -x ) shift; FORCE=t;FRESHEN=t;;
+    -l ) shift; LIST=t;;
+    -r ) shift; READ=t;;
+    -a ) shift; ALL_USERS=t;;
+    -c ) shift; ALL_USERS=f;;
+    -n ) shift; DO_WIN_UINST=t;;
+    -m ) shift; DO_WIN_UINST=f;;
+    -p ) shift; REGTOOL="echo regtool"; PRINT=t;;
+    -f ) shift; FORCE=t;;
+    -1 ) shift; METHOD=1;;
+    -2 ) shift; METHOD=2;;
+    -t ) shift; this_term=$1; shift;;
+    -s ) shift; this_shell=$1; shift;;
+    -h ) shift; print_help; exit;;
+    -v ) shift; echo $0 version $VERSION; exit;;
+  esac
+done
+
+check_requirements
+get_system_info
+
+if [ $FRESHEN = t ]; then
+
+ # Do current user first so that we don't bail
+ # if we don't have rights to HKCR
+ for user in f t; do
+  set_for_user i $user
+
+  INSTALLED=`list_cygwin_registry_keys $DIR_KEY`
+  echo Updating shells $INSTALLED
+  for this_shell in $INSTALLED; do
+   this_term=`find_term_of_installed_shell $this_shell`
+   install $this_term $this_shell
+  done
+ done
+
+elif [ $ACTION = i ]; then
+
+ set_for_user $ACTION $ALL_USERS
+
+ # If no shell specified at this stage,
+ # grab one from /etc/passwd if it is present
+ if [ ! $this_shell ]; then
+  get_shell_from_passwd
+ fi
+
+ install $this_term $this_shell
+
+elif [ $ACTION = u ]; then
+
+ set_for_user $ACTION $ALL_USERS
+
+ if [ -z "$this_shell" ]; then
+  # No shell specified, remove all
+  UINST_SHELLS=$KNOWN_SHELLS
+ else
+  UINST_SHELLS=$this_shell
+ fi
+
+ # Uninstall each shell
+ for ushell in $UINST_SHELLS ; do
+  uninstall $ushell
+ done
+
+ # Remove keys after we've cleared out our entries
+ for key in $DRIVE_KEYS $DIR_KEYS ; do
+  remove_registry_key $key
+ done
+
+fi
+
+if [ $READ = t ]; then
+ # Print some useful information
+ echo OS is $VER
+ echo chere version $VERSION
+ if [ -n "$RUN_EXE" ]; then
+  echo run.exe is available at $RUN_EXE
+ fi
+ echo
+ read_chere_registry_keys
 fi
 
 # If requested, list what is currently installed
@@ -610,13 +865,13 @@ fi
 # since user may pass -m, or HKLM may not be writable
 if [ $LIST = t ]; then
   echo Currently installed Cygwin Here shells \(all users\):
-  $REGTOOL_ list $DIR_KEY_CR 2> /dev/null | sed -n 's/cygwin_\(.*\)/\1/gp'
+  list_cygwin_registry_keys $DIR_KEY_CR
   echo
   echo Currently installed Cygwin Here shells \(current user\):
-  $REGTOOL_ list $DIR_KEY_CU 2> /dev/null | sed -n 's/cygwin_\(.*\)/\1/gp'
+  list_cygwin_registry_keys $DIR_KEY_CU
 fi
 
-if [ $ACTION = nothing ] && [ $LIST = f ] && [ $READ = f ]; then
+if [ $FRESHEN = f ] && [ $ACTION = nothing ] && [ $LIST = f ] && [ $READ = f ]; then
  echo $0: No action taken
  echo Use -h for help
 fi

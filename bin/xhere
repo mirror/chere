@@ -3,12 +3,16 @@
 # Separate script from chere to avoid need for argument parsing
 #
 # first arg is shell
+# second arg is the path
 #
 # Dave Kilroy
-# Oct 2004
+# June 2005
+#
 VERSION=0.6
 # Fix a couple typos
-# Remove commented out commands
+# cd to second arg to handle invocation from RH explorer pane
+# If the second arg is not a valid directory, guess a network path since
+#  we will always lose the \\ prefix
 #VERSION=0.4
 # First version, tied into chere version
 
@@ -26,6 +30,19 @@ fi
 
 # Instead, just set a variable indicating to the login shells not to cd $HOME
 export CHERE_INVOKING=true
+
+# Goto the desired directory.
+# This is necessary when the context menu is opened in the RH pane
+CHERE_DIR=`cygpath "$2"`
+NETWORK_PATH=/$CHERE_DIR
+if [ -d "$CHERE_DIR" ]; then
+ cd "$CHERE_DIR"
+
+# If the full path doesn't exist, this is prob a network path
+elif [ -d "$NETWORK_PATH" ]; then
+ cd "$NETWORK_PATH"
+fi
+# If that doesn't exist then the current should be the desired directory
 
 if [ $1 = /etc/passwd ]; then
  user=`id -un`
