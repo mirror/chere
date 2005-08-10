@@ -16,10 +16,15 @@
 # Dave Kilroy
 # June 2005
 #
-VERSION=0.6
+VERSION=0.6-1
+#	Correct bad function call to get_shell_from_passwd
+#	  Thanks to Dave Griffin
+#VERSION=0.6
 #	Restructure to use shell functions
 #	Add version option
 #       Add -x option to update current entries
+#	Enter correct directory when using the RH pane
+#	  Thanks to Nils Jeppe
 #VERSION=0.5
 #	Add back -a and -c options to set options in HKCU
 #	Make sure the appropriate entries are uninstalled when run.
@@ -234,7 +239,7 @@ set_for_user()
 #  ID_USER - current user
 # Notes:
 #  Exits if /etc/passwd not found
-get_shell_from_pwd()
+get_shell_from_passwd()
 {
  if [ -f /etc/passwd ]; then
   this_shell=`sed -n "s?$ID_USER:.*:/bin/\(.*\)?\1?gp" /etc/passwd`
