@@ -8,7 +8,12 @@
 # Dave Kilroy
 # June 2005
 #
-VERSION=0.6
+VERSION=0.7
+# Run normally if /bin is not in path
+#   Thanks to Dave Griffin
+# Don't complain if second arg not present. Assume we are in the correct
+#   directory. This allows compatibility with previous versions of chere.
+#VERSION=0.6
 # Fix a couple typos
 # cd to second arg to handle invocation from RH explorer pane
 # If the second arg is not a valid directory, guess a network path since
@@ -19,6 +24,10 @@ VERSION=0.6
 # Would have the second arg as a directory to cd to, but the directory
 # can't be quoted correctly for netork paths
 
+# Fully specify paths to binaries, as /bin is not necessarily in the path
+CYGPATH=/bin/cygpath
+SED=/bin/sed
+ID=/bin/id
 
 if [ -z $1 ]; then
  echo An argument is required, specifying the shell to invoke as a login shell
@@ -33,20 +42,22 @@ export CHERE_INVOKING=true
 
 # Goto the desired directory.
 # This is necessary when the context menu is opened in the RH pane
-CHERE_DIR=`cygpath "$2"`
-NETWORK_PATH=/$CHERE_DIR
-if [ -d "$CHERE_DIR" ]; then
- cd "$CHERE_DIR"
+if [ ! -z "$2" ]; then
+ CHERE_DIR=`$CYGPATH "$2"`
+ NETWORK_PATH=/$CHERE_DIR
+ if [ -d "$CHERE_DIR" ]; then
+  cd "$CHERE_DIR"
 
-# If the full path doesn't exist, this is prob a network path
-elif [ -d "$NETWORK_PATH" ]; then
- cd "$NETWORK_PATH"
+ # If the full path doesn't exist, this is prob a network path
+ elif [ -d "$NETWORK_PATH" ]; then
+  cd "$NETWORK_PATH"
+ fi
 fi
 # If that doesn't exist then the current should be the desired directory
 
 if [ $1 = /etc/passwd ]; then
- user=`id -un`
- scmd=`sed -n "s?$user:.*:\(.*\)?\1?gp" /etc/passwd`;
+ user=`$ID -un`
+ scmd=`$SED -n "s?$user:.*:\(.*\)?\1?gp" /etc/passwd`;
  set -- $scmd
 fi
 
