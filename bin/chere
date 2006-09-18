@@ -16,7 +16,12 @@
 # Dave Kilroy
 # June 2005
 #
-VERSION=0.6-1
+VERSION=0.7
+#	Abort registry key removal as soon as we notice a non-empty key
+#       Print help immediately if no action
+#       Make context menu text clearer
+#         Thanks to Brian Mathis
+#VERSION=0.6-1
 #	Correct bad function call to get_shell_from_passwd
 #	  Thanks to Dave Griffin
 #VERSION=0.6
@@ -344,30 +349,30 @@ setup_for_shell()
   bash )
 	SHELL_EXE="/bin/bash.exe"
 	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
-	ACCEL="&Bash Here"
+	ACCEL="&Bash Prompt Here"
 	CPH_DESC="Cygwin Bash Prompt Here";;
   ash )
 	# TODO How to make this a login shell? Is -l undocumented?
 	SHELL_EXE="/bin/sh.exe"
 	SHELL_CMD="-c \\\"cd '%L'; exec $SHELL_EXE\\\"";
-	ACCEL="&Ash Here"
+	ACCEL="&Ash Prompt Here"
 	CPH_DESC="Cygwin Ash Prompt Here";;
   pdksh )
 	SHELL_EXE="/bin/pdksh.exe"
 	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
-	ACCEL="&Pdksh Here"
+	ACCEL="&Pdksh Prompt Here"
 	CPH_DESC="Cygwin Pdksh Prompt Here";;
   tcsh )
 	# Apparently -l only applies if it is the only argument
 	# so this may not work
 	SHELL_EXE="/bin/tcsh.exe"
 	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
-	ACCEL="&Tcsh Here"
+	ACCEL="&Tcsh Prompt Here"
 	CPH_DESC="Cygwin Tcsh Prompt Here";;
   zsh )
 	SHELL_EXE="/bin/zsh.exe"
 	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
-	ACCEL="&Zsh Here"
+	ACCEL="&Zsh Prompt Here"
 	CPH_DESC="Cygwin Zsh Prompt Here";;
   cmd )
 	case $VER in
@@ -527,8 +532,11 @@ remove_registry_key()
    if [ $ENTRIES = "0" ] || ( [ $ENTRIES = "1" ] && [ $PRINT = t ] ); then
     # Remove empty key
     $REGTOOL remove $CUR_KEY
+    CUR_KEY=`echo $CUR_KEY | sed "s?/[^/]*\\$??g"`
+   else
+    # Abort
+    CUR_KEY=
    fi
-   CUR_KEY=`echo $CUR_KEY | sed "s?/[^/]*\\$??g"`
   done
  fi
  unset CUR_KEY ENTRIES
@@ -878,5 +886,5 @@ fi
 
 if [ $FRESHEN = f ] && [ $ACTION = nothing ] && [ $LIST = f ] && [ $READ = f ]; then
  echo $0: No action taken
- echo Use -h for help
+ print_help
 fi
