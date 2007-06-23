@@ -1,5 +1,5 @@
 
-.TH chere 1 "Jan 2006" "User Commands"
+.TH chere 1 "Jun 2007" "User Commands"
 .SH NAME
 chere \- manage Shell Here context menu items
 .SH SYNOPSIS
@@ -10,6 +10,8 @@ chere \- manage Shell Here context menu items
 .IR term ]
 .RB [ \-s
 .IR shell ]
+.RB [ \-d
+.IR display ]
 
 .SH DESCRIPTION
 .B chere
@@ -73,6 +75,11 @@ Start via
 .B bash
 script. Relies on windows to change directory, and login scripts avoiding doing a cd
 .B $HOME 
+.TP
+.B \-\^d display
+Specifies the display to use if xterm is specified as the shell. Defaults to :0. If set to env, then the environment variable
+.B DISPLAY
+is read when the context menu item is selected.
 .TP
 .B \-\^h
 Help
@@ -266,13 +273,13 @@ to set terminal resources (colour, font etc)
 has information on setting up Dynamic titles from various shells
 
 .SH ENVIRONMENT
-.B CHERE_INVOKING
+.B CHERE_INVOKING DISPLAY
 
 .SH FILES
 .B /etc/passwd /bin/xhere /etc/profile ~/profile ~/.bash_profile ~/.bash_login /etc/csh.login /etc/zprofile $ZDOTDIR/.zprofile /etc/zlogin $ZDOTDIR/.zlogin
 
 .SH AUTHOR
-Written by Dave Kilroy <d_inabox@yahoo.com>
+Written by Dave Kilroy <kilroyd@gmail.com>
 
 .SH REPORTING BUGS
 Report bugs to <cygwin@cygwin.com>, following the directions in http://cygwin.com/problems.html. Also attach verbatim output of the command

@@ -14,9 +14,15 @@
 # cmd and command terminals cannot cd to network paths like \\server\share.
 #
 # Dave Kilroy
-# June 2005
+# June 2007
 #
-VERSION=0.7
+VERSION=0.8
+#	Set path and DISPLAY for xterm
+#	  Thanks to Lewis Hyatt for pointing this out and Paul Mallas for
+#	  identifying the -display option.
+#       Fix find_term_of_installed_shell so it copes better if the command
+#	  is not in the precise format we expect.
+#VERSION=0.7
 #	Abort registry key removal as soon as we notice a non-empty key
 #       Print help immediately if no action
 #       Make context menu text clearer
@@ -105,6 +111,8 @@ print_help()
 	      tcsh or network shares.
 	  2 - Start via bash script. Relies on windows to change directory,
 	      and login scripts avoiding doing a cd $HOME 
+	  d - DISPLAY to use (xterm only). Defaults to :0.
+	      Set to env to use the runtime environment variable.
 	  h - Help
 	  v - Version
 
@@ -166,12 +174,11 @@ get_system_info()
  if [ -x /bin/which ]; then
   # Enable prepending of run.exe if we can find it.
   # I'm assuming run has been placed in the path.
-  # We are doing this because run.exe is currently packaged in X-startup-scripts.
-  # It is also likely that many non-X users will have run available on their path.
-  # If and when run.exe migrates to cygutils, this will still work.
-  #
-  # However when that happens, anyone using the run command will need to rerun
-  # chere to pick up the new path to run.
+
+  # We did this because run.exe was packaged in X-startup-scripts.
+  # It is now in its own package and part of base.
+  # However, continue to check for it in this way.
+
   RUN_EXE=`which run.exe 2>/dev/null`
   if [ -n "$RUN_EXE" ]; then
    # Convert to windows path
@@ -265,20 +272,20 @@ get_shell_from_passwd()
 #  DIR_KEY - Registry base to find shell entry
 find_term_of_installed_shell()
 {
-# local KEY_VALUE
+# local KEY_VALUE TERM_REGEXP
 
- # first sed strips the RUN executable
- # second strips arguments passed to xterm/rxvt (including the shell)
- # third strips arguments passed to cmd/command
- # fourth trims the path to the term
- # fifth eliminates the extension
- KEY_VALUE=`$REGTOOL_ get $DIR_KEY/cygwin_$1/command/ | sed "s/.*run\.exe//g"  | sed "s/-e.*//g" | sed "s?/k.*??g" | sed "s?.*[\\]??g" | sed "s/\.exe//g"`
+ # use sed to strip everything except known terminals
+ # construct the regexp of known terminals from KNOWN_TERMS
+ # add command as well to pick up on 9x
+ TERM_REGEXP=`echo $KNOWN_TERMS command | sed 's/ \+/\\\\|/g'`
+ KEY_VALUE=`$REGTOOL_ get $DIR_KEY/cygwin_$1/command/ | sed "s/.*\($TERM_REGEXP\).*/\1/g"`
 
- if [ $KEY_VALUE = command ]; then
+ if [ "$KEY_VALUE" = "command" ]; then
   KEY_VALUE=cmd
  fi
  echo $KEY_VALUE
- unset $KEY_VALUE
+ unset KEY_VALUE
+ unset TERM_REGEXP
 }
 
 # Setup to install for a particular terminal
@@ -286,9 +293,12 @@ find_term_of_installed_shell()
 #  $1 - term to setup for
 # Sets:
 #  TERM_EXE - path to terminals executable
+#  TERM_ARGS - arguments to pass to the terminal
+#  RUN_ARGS - arguments to pass to run.exe
 # Uses:
 #  VER - OS version
 #  KNOWN_TERMS - list of known terminals
+#  DISP - display to use for xterm
 # Notes:
 #  Exits if term is not recognised
 setup_for_term()
@@ -297,6 +307,8 @@ setup_for_term()
  # For each terminal, indicate the executable in TERM_EXE.
  # Unless it is cmd, it is assumed that -e passes the startup
  # command
+ TERM_ARGS=""
+ RUN_ARGS=""
  case $1 in
   cmd )
 	case $VER in
@@ -308,7 +320,9 @@ setup_for_term()
   rxvt )
 	TERM_EXE="/bin/rxvt.exe";;
   xterm )
-	TERM_EXE="/bin/xterm.exe";;
+	TERM_EXE="/bin/xterm.exe"
+	TERM_ARGS="-display $DISP"
+	RUN_ARGS="-p /usr/X11R6/bin";;
   * )
 	echo $0 Error: Unknown terminal $this_term
 	echo
@@ -440,7 +454,9 @@ setup_for_shell()
 #  SHELL_CMD - cleared if using method 2
 # Uses:
 #  RUN_EXE - location of run.exe if present
+#  RUN_ARGS - argument to pass to run.exe
 #  TERM_EXE - location of terminal executable
+#  TERM_ARGS - arguments to pass to reminal
 #  SHELL_EXE - location of shell executable
 build_start_cmd()
 {
@@ -451,9 +467,9 @@ build_start_cmd()
   # METHOD 1 - invoke term and shell directly from the registry
   if [ $1 != cmd ]; then
    if [ -n "$RUN_EXE" ]; then
-    START_CMD="$RUN_EXE $TERM_WIN_EXE -e $SHELL_EXE"
+    START_CMD="$RUN_EXE $RUN_ARGS $TERM_WIN_EXE $TERM_ARGS -e $SHELL_EXE"
    else
-    START_CMD="$TERM_WIN_EXE -e $SHELL_EXE"
+    START_CMD="$TERM_WIN_EXE $TERM_ARGS -e $SHELL_EXE"
    fi
   elif [ $2 != cmd ]; then
    # With cmd (term), the shell executable needs to be converted
@@ -477,9 +493,9 @@ build_start_cmd()
 
   if [ $1 != cmd ]; then
    if [ -n "$RUN_EXE" ]; then
-    START_CMD="$RUN_EXE $TERM_WIN_EXE -e $XHERE $SHELL_EXE"
+    START_CMD="$RUN_EXE $RUN_ARGS $TERM_WIN_EXE $TERM_ARGS -e $XHERE $SHELL_EXE"
    else
-    START_CMD="$TERM_WIN_EXE -e $XHERE $SHELL_EXE"
+    START_CMD="$TERM_WIN_EXE $TERM_ARGS -e $XHERE $SHELL_EXE"
    fi
    if [ $2 != cmd ]; then
     SHELL_CMD="\\\"%L\\\""
@@ -626,7 +642,7 @@ install_context_menu()
 
   $REGTOOL -s set $1/ \"$ACCEL\"
   $REGTOOL add $1/command
-  $REGTOOL -s set $1/command/ \"$START_CMD $SHELL_CMD\"
+  $REGTOOL -e set $1/command/ \"$START_CMD $SHELL_CMD\"
  else
   echo $0 Warning: Not overriding existing entry
   echo
@@ -777,6 +793,7 @@ LIST=f
 READ=f
 METHOD=2
 PRINT=f
+DISP=:0
 # Used to set an extra argument for Control Panel uninstall for current user
 UINST_ARG=""
 
@@ -785,7 +802,7 @@ this_term=cmd
 #this_shell=passwd
 
 ####################### Parse command line #######################
-GETOPTED_ARGS=`getopt -u -o iuxlracnmpf12hvt:s: -- $*`
+GETOPTED_ARGS=`getopt -u -o iuxlracnmpf12hvt:s:d: -- $*`
 set -- $GETOPTED_ARGS
 for ARG; do
   case $ARG in
@@ -804,6 +821,7 @@ for ARG; do
     -2 ) shift; METHOD=2;;
     -t ) shift; this_term=$1; shift;;
     -s ) shift; this_shell=$1; shift;;
+    -d ) shift; DISP=$1; shift;;
     -h ) shift; print_help; exit;;
     -v ) shift; echo $0 version $VERSION; exit;;
   esac
@@ -811,6 +829,11 @@ done
 
 check_requirements
 get_system_info
+
+# if DISP set to env, make sure we set it to read from the environment
+if [ $DISP = env ]; then
+  DISP="%DISPLAY%"
+fi
 
 if [ $FRESHEN = t ]; then
 
