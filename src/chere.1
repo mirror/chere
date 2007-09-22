@@ -1,5 +1,5 @@
 
-.TH chere 1 "Jun 2007" "User Commands"
+.TH chere 1 "Sep 2007" "User Commands"
 .SH NAME
 chere \- manage Shell Here context menu items
 .SH SYNOPSIS
@@ -12,6 +12,10 @@ chere \- manage Shell Here context menu items
 .IR shell ]
 .RB [ \-d
 .IR display ]
+.RB [ \-o
+.IR options ]
+.RB [ \-e
+.IR menutext ]
 
 .SH DESCRIPTION
 .B chere
@@ -80,6 +84,18 @@ script. Relies on windows to change directory, and login scripts avoiding doing 
 Specifies the display to use if xterm is specified as the shell. Defaults to :0. If set to env, then the environment variable
 .B DISPLAY
 is read when the context menu item is selected.
+.TP
+.B \-\^o options
+Add
+.IR options
+to the terminal startup command. If more than one option is specified, they should all be contained within a single set of quotes.
+
+.TP
+.B \-\^e menutext
+Use
+.IR menutext
+as the context menu text.
+
 .TP
 .B \-\^h
 Help
@@ -192,6 +208,22 @@ requires your login script to check the environment variable
 .B HOME
 directory if it is present. The login script should unset the variable after it sees it, so that subsequent child logins are unaffected.
 
+When using
+.B -e
+you can specify a keyboard shortcut for the context menu by prefixing the appropriate letter in the text with an ampersand (&).
+
+Freshening (
+.B -x
+) updates all currently installed context menu items. However, it does not preserve custom user arguments and menu entry text. If you have previously specified these with
+.B -o
+or
+.B -e,
+do not use it.
+Freshening does support the use of
+.B -o
+in the same invocation. It will abort if you attempt to specify the menu text entry with 
+.B -e.
+
 .SH DEBUGGING
 Several options are present to aid debugging.
 
@@ -267,7 +299,14 @@ or
 .PP
 Use 
 .B ~/.Xdefaults
-to set terminal resources (colour, font etc)
+to set terminal resources (colour, font etc). This even works for rxvt in non-X11 mode.
+.PP
+You can use
+.B -o
+to set the terminals -name option,
+.B -e
+to distinguish the context menu entries, and specify separate terminal resources for each of the context menu entries in
+.B ~/.Xdefaults.
 .PP
 .B http://biocycle.atmos.colostate.edu/~johnk/Xterm-Title.html
 has information on setting up Dynamic titles from various shells

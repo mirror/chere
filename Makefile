@@ -1,7 +1,7 @@
 
 .PHONY=all clean distclean help package
 PKG_NAME=chere
-MAIN_VER=0.8
+MAIN_VER=1.0
 CYG_VER=1
 
 BIN_IPATH=bin
