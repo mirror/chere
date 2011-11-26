@@ -16,11 +16,16 @@
 # On XP, I have seen the term/shell shutdown immediately (unless term set to cmd)
 # Prefixing the command with run.exe stopped this, but I don't know what was wrong
 # Tried several variants alleged to work with XP to no avail. Path issue?
+# Fixed in V0.3?
 #
 # Dave Kilroy
 # Oct 2004
 #
-VERSION=0.2
+VERSION=0.3
+#	Use forward slashes for command to fix XP problems (CGF)
+#	Correct quoting (CGF)
+#	Add -r option to read registry entries to stdout to help debugging
+#VERSION=0.2
 #	Use consistent registry key based on shell id
 #	Fixup windows version check
 #	Use correct cmd/command quoting
@@ -52,19 +57,21 @@ ACTION=nothing
 DO_WIN_UINST=t
 FORCE=f
 LIST=f
+READ=f
 
 # Default terminal and shell if not specified
 this_term=cmd
 #this_shell=passwd
 
 ####################### Parse command line #######################
-GETOPTED_ARGS=`getopt -u -o aciulnmpfht:s: -- $*`
+GETOPTED_ARGS=`getopt -u -o aciulrnmpfht:s: -- $*`
 set -- $GETOPTED_ARGS
 for ARG; do
   case $ARG in
     -i ) shift; ACTION=i;;
     -u ) shift; ACTION=u;;
     -l ) shift; LIST=t;;
+    -r ) shift; READ=t;;
     -n ) shift; DO_WIN_UINST=t;;
     -m ) shift; DO_WIN_UINST=f;;
     -p ) shift; REGTOOL="echo regtool";;
@@ -104,6 +111,7 @@ for ARG; do
 	  m - Minimal, no Control Panel uninstall
 	  f - Force write (overwrite existing, ignore missing files)
 	  p - Print regtool commands to stdout rather than running them
+	  r - Read all chere registry entries to stdout
 	  h - Help
 
 	Supported terminals:
@@ -144,7 +152,7 @@ fi
 
 # Check windows version and cygwin install directory
 VER=`uname -s`
-CYG_DIR=`cygpath -m /`
+CYG_DIR=`cygpath -w /`
 ID_USER=`id -nu`
 
 # Check we have regtool (from cygwin package)
@@ -178,11 +186,10 @@ if [ $ACTION = i ]; then
   fi
  fi
 
-
  #################### Define terminals ########################
- # For each terminal, indicate how to start it in TERM_CMD,
- # with the last option set for the following text to be the initial
- # command to start the shell.
+ # For each terminal, indicate the executable in TERM_EXE.
+ # Unless it is cmd, it is assumed that -e passes the startup
+ # command
  case $this_term in
   cmd )
 	case $VER in
@@ -194,10 +201,8 @@ if [ $ACTION = i ]; then
 	 TERM_EXE=command.com;;
 	esac;;
   rxvt )
-	TERM_CMD="$CYG_DIR/bin/rxvt.exe -e"
 	TERM_EXE="/bin/rxvt.exe";;
   xterm )
-	TERM_CMD="$CYG_DIR/bin/xterm.exe -e"
 	TERM_EXE="/bin/xterm.exe";;
   * )
 	echo $0 Error: Unknown terminal $this_term
@@ -217,46 +222,47 @@ if [ $ACTION = i ]; then
  # the description text to be displayed in control panel uninstall window
  case $this_shell in
   bash )
-	SHELL_CMD="$CYG_DIR/bin/bash -l -c \\\"cd '%L'; exec /bin/bash\\\""
 	SHELL_EXE="/bin/bash.exe"
+	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
 	ACCEL="&Bash Here"
 	CPH_DESC="Cygwin Bash Prompt Here";;
   ash )
 	# TODO How to make this a login shell? Is -l undocumented?
-	SHELL_CMD="$CYG_DIR/bin/sh -c \\\"cd '%L'; exec /bin/sh\\\"";
 	SHELL_EXE="/bin/sh.exe"
+	SHELL_CMD="-c \\\"cd '%L'; exec $SHELL_EXE\\\"";
 	ACCEL="&Ash Here"
 	CPH_DESC="Cygwin Ash Prompt Here";;
   pdksh )
-	SHELL_CMD="$CYG_DIR/bin/pdksh -l -c \\\"cd '%L'; exec /bin/pdksh\\\""
 	SHELL_EXE="/bin/pdksh.exe"
+	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
 	ACCEL="&Pdksh Here"
 	CPH_DESC="Cygwin Pdksh Prompt Here";;
   tcsh )
 	# Apparently -l only applies if it is the only argument
 	# so this may not work
-	SHELL_CMD="$CYG_DIR/bin/tcsh -l -c \\\"cd '%L'; exec /bin/tcsh\\\""
 	SHELL_EXE="/bin/tcsh.exe"
+	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
 	ACCEL="&Tcsh Here"
 	CPH_DESC="Cygwin Tcsh Prompt Here";;
   zsh )
-	SHELL_CMD="$CYG_DIR/bin/zsh -l -c \\\"cd '%L'; exec /bin/zsh\\\""
 	SHELL_EXE="/bin/zsh.exe"
+	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
 	ACCEL="&Zsh Here"
 	CPH_DESC="Cygwin Zsh Prompt Here";;
   cmd )
 	case $VER in
 	CYGWIN_NT* )
-	 SHELL_CMD="cmd /k cd %L"
-	 SHELL_EXE=cmd.exe;;
+	 SHELL_EXE=cmd.exe
+	 SHELL_CMD="/k cd %L";;
 	* )
-	 SHELL_CMD="command /k cd \\\"%1\\\""
-	 SHELL_EXE-command.com;;
+	 SHELL_EXE=command.com
+	 SHELL_CMD="/k cd \\\"%1\\\"";;
 	esac
 	ACCEL="&Command Prompt Here"
 	CPH_DESC="Command Prompt Here (cygwin)";;
   passwd )
 	# Experimental
+	SHELL_EXE="/bin/sh"
 	# Quoting nightmare. Step through it all
 	# c:\cygwin\bin\sh -c "scmd=`sed -n \"s?\`id -un\`:.*:\\\(.*\\\)?\\\1?gp\" /etc/passwd`; $scmd -l -c \"cd 'c:/program files'; exec $scmd\""
 	# works from the command line
@@ -267,8 +273,7 @@ if [ $ACTION = i ]; then
 	# When evaluated into a variable, need another level of quoting:
 	# "c:\cygwin\bin\sh -c \\\"scmd=\\\`sed -n \\\\\\\"s?\\\\\\\`id -un\\\\\\\`:.*:\\\\\\\\\\\\(.*\\\\\\\\\\\\)?\\\\\\\\\\\\1?gp\\\\\\\" /etc/passwd\\\`; \\\$scmd -l -c \\\\\\\"cd '%1'; exec \\\$scmd\\\\\\\"\\\""
 	# Ouch. If you think it can be quoted better, let me know.
-	SHELL_CMD="$CYG_DIR/bin/sh -c \\\"scmd=\\\`sed -n \\\\\\\"s?\\\\\\\`id -un\\\\\\\`:.*:\\\\\\\\\\\\(.*\\\\\\\\\\\\)?\\\\\\\\\\\\1?gp\\\\\\\" /etc/passwd\\\`; \\\$scmd -l -c \\\\\\\"cd '%L'; exec \\\$scmd\\\\\\\"\\\""
-	SHELL_EXE=/bin/sh
+	SHELL_CMD="-c \\\"scmd=\\\`sed -n \\\\\\\"s?\\\\\\\`id -un\\\\\\\`:.*:\\\\\\\\\\\\(.*\\\\\\\\\\\\)?\\\\\\\\\\\\1?gp\\\\\\\" /etc/passwd\\\`; \\\$scmd -l -c \\\\\\\"cd '%L'; exec \\\$scmd\\\\\\\"\\\""
 	ACCEL="Shell Prompt &Here"
 	CPH_DESC="Cygwin Prompt Here"
 
@@ -299,7 +304,7 @@ if [ $ACTION = i ]; then
  esac
 
  # Check TERM and SHELL are present
- if [ ! -x "$TERM_EXE" ] && [ $this_term != cmd ]; then
+ if [ ! -x "$TERM_EXE" ] && [ "$this_term" != cmd ]; then
   if [ $FORCE = t ]; then
    echo $0 Warning: $TERM_EXE not found
   else
@@ -310,7 +315,7 @@ if [ $ACTION = i ]; then
    exit
   fi
  fi
- if [ ! -x "$SHELL_EXE" ] && [ $this_shell != cmd ]; then
+ if [ ! -x "$SHELL_EXE" ] && [ "$this_shell" != cmd ]; then
   if [ $FORCE = t ]; then
    echo $0 Warning: $SHELL_EXE not found
   else
@@ -322,18 +327,27 @@ if [ $ACTION = i ]; then
   fi
  fi
 
+ # Transform TERM_EXE into windows paths (when not cmd) and append -e
+ if [ $this_term != cmd ]; then
+  START_CMD="`cygpath -w \"$TERM_EXE\"` -e $SHELL_EXE"
+ elif [ $this_shell != cmd ]; then
+  # With cmd (term), the shell executable needs to be converted to a windows path
+  # With cmd, we ignore TERM_CMD. For reference, note that windows does not cope
+  # with spaces at the start of a command in the registry. Starts complaining
+  # about missing files.
+  START_CMD=`cygpath -w "$SHELL_EXE"`
+ else
+  # term and shell are cmd
+  START_CMD=$SHELL_EXE
+ fi
+
  ####### Install ###########
  if [ $FORCE = t ] || ! $REGTOOL_ check $DRIVE_KEY/cygwin_$this_shell 2> /dev/null ; then
   # Add Registry Key for Drives
   $REGTOOL add $DRIVE_KEY/cygwin_$this_shell
   $REGTOOL -s set $DRIVE_KEY/cygwin_$this_shell/ \"$ACCEL\"
   $REGTOOL add $DRIVE_KEY/cygwin_$this_shell/command
-  if [ "$TERM_CMD" ]; then
-   $REGTOOL -s set $DRIVE_KEY/cygwin_$this_shell/command/ \"$TERM_CMD $SHELL_CMD\"
-  else
-   # Windows doesn't like command keys starting with spaces
-   $REGTOOL -s set $DRIVE_KEY/cygwin_$this_shell/command/ \"$SHELL_CMD\"
-  fi
+  $REGTOOL -s set $DRIVE_KEY/cygwin_$this_shell/command/ \"$START_CMD $SHELL_CMD\"
  else
   echo $0 Warning: Not overriding existing entry
   echo
@@ -347,12 +361,7 @@ if [ $ACTION = i ]; then
   $REGTOOL add $DIR_KEY/cygwin_$this_shell
   $REGTOOL -s set $DIR_KEY/cygwin_$this_shell/ \"$ACCEL\"
   $REGTOOL add $DIR_KEY/cygwin_$this_shell/command
-  if [ "$TERM_CMD" ]; then
-   $REGTOOL -s set $DIR_KEY/cygwin_$this_shell/command/ \"$TERM_CMD $SHELL_CMD\"
-  else
-   # Windows doesn't like command keys starting with spaces
-   $REGTOOL -s set $DIR_KEY/cygwin_$this_shell/command/ \"$SHELL_CMD\"
-  fi
+  $REGTOOL -s set $DIR_KEY/cygwin_$this_shell/command/ \"$START_CMD $SHELL_CMD\"
  else
   echo $0 Warning: Not overriding existing entry
   echo
@@ -364,11 +373,12 @@ if [ $ACTION = i ]; then
  if [ $DO_WIN_UINST = t ]; then
   # Add uninstall registry entry
   if [ $FORCE = t ] || ! $REGTOOL_ check $UINST_KEY/cygwin_$this_shell 2> /dev/null ; then
+   ASH_EXE=`cygpath -w /bin/sh`
    # Actually, should create an .inf so windows can get rid of the menu entries
    # even after the cygwin directory is wiped :(
    $REGTOOL add $UINST_KEY/cygwin_$this_shell
    $REGTOOL -s set $UINST_KEY/cygwin_$this_shell/DisplayName \"$CPH_DESC\"
-   $REGTOOL -s set $UINST_KEY/cygwin_$this_shell/UnInstallString \"$CYG_DIR/bin/bash -c \\\"$CYG_DIR/bin/chere -u -s $this_shell\\\"\"
+   $REGTOOL -s set $UINST_KEY/cygwin_$this_shell/UnInstallString \"$ASH_EXE -c \\\"/bin/chere -u -s $this_shell\\\"\"
   else
    echo $0 Warning: Not overriding existing entry
    echo
@@ -397,6 +407,48 @@ elif [ $ACTION = u ]; then
  fi
 fi
 
+if [ $READ = t ]; then
+ # Print some useful information
+ echo OS is $VER
+ echo chere version $VERSION
+ echo
+ for shell in $KNOWN_SHELLS; do
+  echo --- $shell keys ---
+  #### Directory entries ####
+  if $REGTOOL_ check $DIR_KEY/cygwin_$shell 2> /dev/null; then
+    echo Directory menu item
+    $REGTOOL get $DIR_KEY/cygwin_$shell/
+    echo
+  fi
+  if $REGTOOL_ check $DIR_KEY/cygwin_$shell/command 2> /dev/null; then
+    echo Directory command
+    $REGTOOL get $DIR_KEY/cygwin_$shell/command/
+    echo
+  fi
+  #### Drive entries ####
+  if $REGTOOL_ check $DRIVE_KEY/cygwin_$shell 2> /dev/null; then
+    echo Drive menu item
+    $REGTOOL get $DRIVE_KEY/cygwin_$shell/
+    echo
+  fi
+  if $REGTOOL_ check $DRIVE_KEY/cygwin_$shell/command 2> /dev/null; then
+    echo Drive command
+    $REGTOOL get $DRIVE_KEY/cygwin_$shell/command/
+    echo
+  fi
+  #### UnInstall entries ####
+  if $REGTOOL_ check $UINST_KEY/cygwin_$shell 2> /dev/null; then
+    echo Uninstall description
+    $REGTOOL get $UINST_KEY/cygwin_$shell/DisplayName
+    echo
+    echo Uninstall command
+    $REGTOOL get $UINST_KEY/cygwin_$shell/UnInstallString
+    echo
+  fi
+  echo
+ done
+fi
+
 # If requested, list what is currently installed
 # Rely on the DIR key rather than UINST key, since user may pass -m
 if [ $LIST = t ]; then
@@ -407,7 +459,9 @@ if [ $LIST = t ]; then
   fi
   echo Currently installed Cygwin Here shells:
   $REGTOOL_ list $DIR_KEY | sed -n 's/cygwin_\(.*\)/\1/gp'
-elif [ $ACTION = nothing ]; then
+fi
+
+if [ $ACTION = nothing ] && [ $LIST = f ] && [ $READ = f ]; then
  echo $0: No action taken
  echo Use -h for help
 fi
