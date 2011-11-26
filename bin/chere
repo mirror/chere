@@ -1,0 +1,413 @@
+#!/bin/sh
+#
+# This shell script (un)installs Cygwin Prompt Here functionality.
+# Requires: regtool, uname, id, cygpath, getopt
+# Optionally: sed
+#
+# TODO
+# ----
+# 1. Use run.exe to kick things off, eliminating the flashing window
+#	Will have to wait until run.exe is packaged [and not in X]
+# 2. When the runtime check is used, the initial sh stays in the background.
+#	Can't use exec to get rid of it. Can it be done?
+#
+# KNOWN ERRORS
+#
+# On XP, I have seen the term/shell shutdown immediately (unless term set to cmd)
+# Prefixing the command with run.exe stopped this, but I don't know what was wrong
+# Tried several variants alleged to work with XP to no avail. Path issue?
+#
+# Dave Kilroy
+# Oct 2004
+#
+VERSION=0.2
+#	Use consistent registry key based on shell id
+#	Fixup windows version check
+#	Use correct cmd/command quoting
+#	Add list option, install is no longer default
+#	Check regtool/sed is present
+#	Add xterm -e arg
+#	Check the term/shell is present before installing (except cmd)
+#	Add information on window title and login shells
+#	Set pdksh, tcsh, zsh to start login shells
+#	Case statements ash compatible
+#	Look in passwd for shell if not specified
+#	Mental runtime check of passwd added. Use at own risk
+#	Changed to use getopt and removed [[ ]] tests. Ash compatible.
+#	Updated shebang
+#VERSION=0.1
+#	Initial implementation.
+#	Bash required.
+#	Possible quoting problems.
+#	Windows uninstall only posible if script present
+
+# Need to use eval to force correct quote evaluation
+REGTOOL="eval regtool"
+REGTOOL_=regtool
+
+KNOWN_TERMS="cmd rxvt xterm"
+KNOWN_SHELLS="ash bash cmd pdksh tcsh zsh passwd"
+
+ACTION=nothing
+DO_WIN_UINST=t
+FORCE=f
+LIST=f
+
+# Default terminal and shell if not specified
+this_term=cmd
+#this_shell=passwd
+
+####################### Parse command line #######################
+GETOPTED_ARGS=`getopt -u -o aciulnmpfht:s: -- $*`
+set -- $GETOPTED_ARGS
+for ARG; do
+  case $ARG in
+    -i ) shift; ACTION=i;;
+    -u ) shift; ACTION=u;;
+    -l ) shift; LIST=t;;
+    -n ) shift; DO_WIN_UINST=t;;
+    -m ) shift; DO_WIN_UINST=f;;
+    -p ) shift; REGTOOL="echo regtool";;
+    -t ) shift; this_term=$1; shift;;
+    -s ) shift; this_shell=$1; shift;;
+    -f ) shift; FORCE=t;;
+    -h ) shift; cat <<-EOF
+	$0 version $VERSION
+
+	Usage:
+	$0 -<iul> [-aclnmfph] [-t <term>] [-s <shell>]
+
+	Adds the stated terminal/shell combination to the folder context menu
+	for all users. This allows you to right click a folder in Windows Explorer
+	and open a Cygwin shell in that folder.
+
+	If the -i flag is passed without specifying a shell, the shell specified
+	in /etc/passwd for the current user is added. If the terminal is not
+	specified, cmd is used.
+
+	You will require appropriate access rights for this to work. i.e. you
+	need to have Administrator rights.
+
+	Where possible, a login shell will be started. i.e. /etc/profile,
+	~/profile, or their equivalents are run as well as the shells usual
+	rc files. This does not apply to cmd.
+
+	The title of the window is not set. It will default to whatever the
+	terminal sets it to. This can usually be controlled from within the
+	terminal.
+
+	Options:
+	  i - Install
+	  u - Uninstall
+	  l - List currently installed Shell Here
+	  n - Be Nice and provide Control Panel uninstall option (Default)
+	  m - Minimal, no Control Panel uninstall
+	  f - Force write (overwrite existing, ignore missing files)
+	  p - Print regtool commands to stdout rather than running them
+	  h - Help
+
+	Supported terminals:
+	$KNOWN_TERMS
+
+	Supported shells:
+	$KNOWN_SHELLS
+
+	Note:
+	The 'passwd' shell tries to determine your preferred shell at runtime
+	from your passwd entry. This works for me, but consider it experimental.
+
+	Example:
+	  $0 -il -t rxvt -s tcsh
+	Install tcsh, using rxvt as the terminal, then list what is installed.
+
+	Helpful hints
+	-------------
+	If you are using cmd as a terminal because you don't want to install X,
+	consider using rxvt, which does not require X.
+
+	If you really do like cmd, you can still use it as a shell in rxvt
+	or xterm.
+
+	Use ~/.Xdefaults to set terminal resources (colour, font etc)
+	EOF
+	# Close '
+	exit;;
+  esac
+done
+
+# Quick check of common utilities (from sh-utils, cygwin packages)
+if [ ! -x /bin/uname ] || [ ! -x /bin/cygpath ] || [ ! -x /bin/id ]; then
+ echo $0 Error: uname / id / cygpath not found
+ echo Aborting
+ exit
+fi
+
+# Check windows version and cygwin install directory
+VER=`uname -s`
+CYG_DIR=`cygpath -m /`
+ID_USER=`id -nu`
+
+# Check we have regtool (from cygwin package)
+if [ ! -x /bin/regtool ]; then
+ echo $0 Error: /bin/regtool not found
+ echo
+ echo You need regtool installed for this script to work.
+ echo Aborting.
+ exit
+fi
+
+# Identify the registry keys for each OS
+# Same for all?
+DIR_KEY=/HKCR/Directory/Shell
+DRIVE_KEY=/HKCR/Drive/Shell
+UINST_KEY=/HKLM/Software/Microsoft/Windows/CurrentVersion/Uninstall
+
+if [ $ACTION = i ]; then
+
+ # If no shell specified at this stage, grab one from /etc/passwd if it is present
+ if [ ! $this_shell ] && [ -x /bin/sed ]; then
+  if [ -f /etc/passwd ]; then
+   this_shell=`sed -n "s?$ID_USER:.*:/bin/\(.*\)?\1?gp" /etc/passwd`
+   echo Shell defaulting to $this_shell defined for $ID_USER
+  else
+   echo $0 Error: No shell specified, and /etc/passwd not present
+   echo
+   echo Can\'t guess what shell you want.
+   echo Use -s to specify the shell.
+   exit
+  fi
+ fi
+
+
+ #################### Define terminals ########################
+ # For each terminal, indicate how to start it in TERM_CMD,
+ # with the last option set for the following text to be the initial
+ # command to start the shell.
+ case $this_term in
+  cmd )
+	case $VER in
+	CYGWIN_NT* )
+	 TERM_CMD=""
+	 TERM_EXE=cmd.exe;;
+	* )
+	 TERM_CMD=""
+	 TERM_EXE=command.com;;
+	esac;;
+  rxvt )
+	TERM_CMD="$CYG_DIR/bin/rxvt.exe -e"
+	TERM_EXE="/bin/rxvt.exe";;
+  xterm )
+	TERM_CMD="$CYG_DIR/bin/xterm.exe -e"
+	TERM_EXE="/bin/xterm.exe";;
+  * )
+	echo $0 Error: Unknown terminal $this_term
+	echo
+	echo Supported terminals:
+	echo $KNOWN_TERMS
+	echo
+	echo Use -h for help
+	exit;;
+ esac
+
+ #################### Define shells #############################
+ # For each shell, specify:
+ # the command that should be used to start it in the directory %1, and keep it open.
+ # the location of the executable to be checked on install
+ # the accelerator to be displayed on the menu
+ # the description text to be displayed in control panel uninstall window
+ case $this_shell in
+  bash )
+	SHELL_CMD="$CYG_DIR/bin/bash -l -c \\\"cd '%L'; exec /bin/bash\\\""
+	SHELL_EXE="/bin/bash.exe"
+	ACCEL="&Bash Here"
+	CPH_DESC="Cygwin Bash Prompt Here";;
+  ash )
+	# TODO How to make this a login shell? Is -l undocumented?
+	SHELL_CMD="$CYG_DIR/bin/sh -c \\\"cd '%L'; exec /bin/sh\\\"";
+	SHELL_EXE="/bin/sh.exe"
+	ACCEL="&Ash Here"
+	CPH_DESC="Cygwin Ash Prompt Here";;
+  pdksh )
+	SHELL_CMD="$CYG_DIR/bin/pdksh -l -c \\\"cd '%L'; exec /bin/pdksh\\\""
+	SHELL_EXE="/bin/pdksh.exe"
+	ACCEL="&Pdksh Here"
+	CPH_DESC="Cygwin Pdksh Prompt Here";;
+  tcsh )
+	# Apparently -l only applies if it is the only argument
+	# so this may not work
+	SHELL_CMD="$CYG_DIR/bin/tcsh -l -c \\\"cd '%L'; exec /bin/tcsh\\\""
+	SHELL_EXE="/bin/tcsh.exe"
+	ACCEL="&Tcsh Here"
+	CPH_DESC="Cygwin Tcsh Prompt Here";;
+  zsh )
+	SHELL_CMD="$CYG_DIR/bin/zsh -l -c \\\"cd '%L'; exec /bin/zsh\\\""
+	SHELL_EXE="/bin/zsh.exe"
+	ACCEL="&Zsh Here"
+	CPH_DESC="Cygwin Zsh Prompt Here";;
+  cmd )
+	case $VER in
+	CYGWIN_NT* )
+	 SHELL_CMD="cmd /k cd %L"
+	 SHELL_EXE=cmd.exe;;
+	* )
+	 SHELL_CMD="command /k cd \\\"%1\\\""
+	 SHELL_EXE-command.com;;
+	esac
+	ACCEL="&Command Prompt Here"
+	CPH_DESC="Command Prompt Here (cygwin)";;
+  passwd )
+	# Experimental
+	# Quoting nightmare. Step through it all
+	# c:\cygwin\bin\sh -c "scmd=`sed -n \"s?\`id -un\`:.*:\\\(.*\\\)?\\\1?gp\" /etc/passwd`; $scmd -l -c \"cd 'c:/program files'; exec $scmd\""
+	# works from the command line
+	# In registry it needs to read the same:
+	# c:\cygwin\bin\sh -c "scmd=`sed -n \"s?\`id -un\`:.*:\\\(.*\\\)?\\\1?gp\" /etc/passwd`; $scmd -l -c \"cd '%1'; exec $scmd\""
+	# When passed to regtool, need to requote for the shell:
+	# "c:\cygwin\bin\sh -c \"scmd=\`sed -n \\\"s?\\\`id -un\\\`:.*:\\\\\\(.*\\\\\\)?\\\\\\1?gp\\\" /etc/passwd\`; \$scmd -l -c \\\"cd '%1'; exec \$scmd\\\"\""
+	# When evaluated into a variable, need another level of quoting:
+	# "c:\cygwin\bin\sh -c \\\"scmd=\\\`sed -n \\\\\\\"s?\\\\\\\`id -un\\\\\\\`:.*:\\\\\\\\\\\\(.*\\\\\\\\\\\\)?\\\\\\\\\\\\1?gp\\\\\\\" /etc/passwd\\\`; \\\$scmd -l -c \\\\\\\"cd '%1'; exec \\\$scmd\\\\\\\"\\\""
+	# Ouch. If you think it can be quoted better, let me know.
+	SHELL_CMD="$CYG_DIR/bin/sh -c \\\"scmd=\\\`sed -n \\\\\\\"s?\\\\\\\`id -un\\\\\\\`:.*:\\\\\\\\\\\\(.*\\\\\\\\\\\\)?\\\\\\\\\\\\1?gp\\\\\\\" /etc/passwd\\\`; \\\$scmd -l -c \\\\\\\"cd '%L'; exec \\\$scmd\\\\\\\"\\\""
+	SHELL_EXE=/bin/sh
+	ACCEL="Shell Prompt &Here"
+	CPH_DESC="Cygwin Prompt Here"
+
+	# Extra check before installing passwd
+	if [ ! -f /etc/passwd ]; then
+	 if [ $FORCE = t ]; then
+	  echo $0 Warning: /etc/passwd not found
+	  echo
+	  echo This file is required for the runtime context menu item to work.
+	  echo Run mkpasswd
+	 else
+	  echo $0 Error: /etc/passwd not found
+	  echo
+	  echo This file is required for the runtime context menu item to work.
+	  echo Run mkpasswd to initialise the file.
+	  echo Use -f to install anyway.
+	  exit
+	 fi
+	fi;;
+  * )
+	echo $0 Error: Unknown shell $this_shell
+	echo
+	echo Supported shells:
+	echo $KNOWN_SHELLS
+	echo
+	echo Use -h for help
+	exit;;
+ esac
+
+ # Check TERM and SHELL are present
+ if [ ! -x "$TERM_EXE" ] && [ $this_term != cmd ]; then
+  if [ $FORCE = t ]; then
+   echo $0 Warning: $TERM_EXE not found
+  else
+   echo $0 Error: $TERM_EXE not found
+   echo
+   echo $TERM_EXE is where I expect to find your $this_term
+   echo Use -f to install anyway.
+   exit
+  fi
+ fi
+ if [ ! -x "$SHELL_EXE" ] && [ $this_shell != cmd ]; then
+  if [ $FORCE = t ]; then
+   echo $0 Warning: $SHELL_EXE not found
+  else
+   echo $0 Error: $SHELL_EXE not found
+   echo
+   echo $SHELL_EXE is where I expect to find $this_shell
+   echo Use -f to install anyway.
+   exit
+  fi
+ fi
+
+ ####### Install ###########
+ if [ $FORCE = t ] || ! $REGTOOL_ check $DRIVE_KEY/cygwin_$this_shell 2> /dev/null ; then
+  # Add Registry Key for Drives
+  $REGTOOL add $DRIVE_KEY/cygwin_$this_shell
+  $REGTOOL -s set $DRIVE_KEY/cygwin_$this_shell/ \"$ACCEL\"
+  $REGTOOL add $DRIVE_KEY/cygwin_$this_shell/command
+  if [ "$TERM_CMD" ]; then
+   $REGTOOL -s set $DRIVE_KEY/cygwin_$this_shell/command/ \"$TERM_CMD $SHELL_CMD\"
+  else
+   # Windows doesn't like command keys starting with spaces
+   $REGTOOL -s set $DRIVE_KEY/cygwin_$this_shell/command/ \"$SHELL_CMD\"
+  fi
+ else
+  echo $0 Warning: Not overriding existing entry
+  echo
+  echo Entry for $this_shell already exists in the Registry Drive Key
+  echo Use -f to override existing key.
+  echo
+ fi
+
+ if [ $FORCE = t ] || ! $REGTOOL_ check $DIR_KEY/cygwin_$this_shell 2> /dev/null; then
+  # Add Registry Key for Directories/Folders
+  $REGTOOL add $DIR_KEY/cygwin_$this_shell
+  $REGTOOL -s set $DIR_KEY/cygwin_$this_shell/ \"$ACCEL\"
+  $REGTOOL add $DIR_KEY/cygwin_$this_shell/command
+  if [ "$TERM_CMD" ]; then
+   $REGTOOL -s set $DIR_KEY/cygwin_$this_shell/command/ \"$TERM_CMD $SHELL_CMD\"
+  else
+   # Windows doesn't like command keys starting with spaces
+   $REGTOOL -s set $DIR_KEY/cygwin_$this_shell/command/ \"$SHELL_CMD\"
+  fi
+ else
+  echo $0 Warning: Not overriding existing entry
+  echo
+  echo Entry for $this_shell already exists in the Registry Directory Key
+  echo Use -f to override existing key.
+  echo
+ fi
+
+ if [ $DO_WIN_UINST = t ]; then
+  # Add uninstall registry entry
+  if [ $FORCE = t ] || ! $REGTOOL_ check $UINST_KEY/cygwin_$this_shell 2> /dev/null ; then
+   # Actually, should create an .inf so windows can get rid of the menu entries
+   # even after the cygwin directory is wiped :(
+   $REGTOOL add $UINST_KEY/cygwin_$this_shell
+   $REGTOOL -s set $UINST_KEY/cygwin_$this_shell/DisplayName \"$CPH_DESC\"
+   $REGTOOL -s set $UINST_KEY/cygwin_$this_shell/UnInstallString \"$CYG_DIR/bin/bash -c \\\"$CYG_DIR/bin/chere -u -s $this_shell\\\"\"
+  else
+   echo $0 Warning: Not overriding existing entry
+   echo
+   echo Entry for $this_shell already exists in the Registry uninstall section
+   echo Use -f to override existing key.
+   echo
+  fi
+ fi
+elif [ $ACTION = u ]; then
+###### UnInstall ##########
+ # Check each key exists before attempting to remove it
+ if $REGTOOL_ check $DRIVE_KEY/cygwin_$this_shell/command 2> /dev/null; then
+  $REGTOOL remove $DRIVE_KEY/cygwin_$this_shell/command
+ fi
+ if $REGTOOL_ check $DRIVE_KEY/cygwin_$this_shell 2> /dev/null; then
+  $REGTOOL remove $DRIVE_KEY/cygwin_$this_shell
+ fi
+ if $REGTOOL_ check $DIR_KEY/cygwin_$this_shell/command 2> /dev/null; then
+  $REGTOOL remove $DIR_KEY/cygwin_$this_shell/command
+ fi
+ if $REGTOOL_ check $DIR_KEY/cygwin_$this_shell 2> /dev/null; then
+  $REGTOOL remove $DIR_KEY/cygwin_$this_shell
+ fi
+ if $REGTOOL_ check $UINST_KEY/cygwin_$this_shell 2> /dev/null; then
+  $REGTOOL remove $UINST_KEY/cygwin_$this_shell
+ fi
+fi
+
+# If requested, list what is currently installed
+# Rely on the DIR key rather than UINST key, since user may pass -m
+if [ $LIST = t ]; then
+  if [ ! -x /bin/sed ]; then
+    echo You need sed installed for the List option to work
+    echo Please have a look at your context menu instead!
+    exit
+  fi
+  echo Currently installed Cygwin Here shells:
+  $REGTOOL_ list $DIR_KEY | sed -n 's/cygwin_\(.*\)/\1/gp'
+elif [ $ACTION = nothing ]; then
+ echo $0: No action taken
+ echo Use -h for help
+fi
