@@ -1,0 +1,43 @@
+#!/bin/bash
+# Have to use bash; can't get ash to "exec -l"
+# Spearate script from chere to avoid need for argument parsing
+#
+# first arg is shell
+#
+# Dave Kilroy
+# Oct 2004
+VERSION=0.4
+# First version, tied into chere version
+
+# Would have the second arg as a directory to cd to, but the directory
+# can't be quoted correctly for netork paths
+
+
+if [ -z $1 ]; then
+ echo An argument is required, specifying the shell in invoke as a login shell
+ exit
+elif [ $1 == -h ]; then
+ echo This script is not intended to be invoked from the command line. Try chere -h
+fi
+
+# Instead, just set a variable indicating to the login shells not to cd $HOME
+export CHERE_INVOKING=true
+
+# Environment variable to tell shell scripts where to go
+#export CHERE_DIR=`cygpath -u $2`
+
+if [ $1 = /etc/passwd ]; then
+ user=`id -un`
+ scmd=`sed -n "s?$user:.*:\(.*\)?\1?gp" /etc/passwd`;
+ set -- $scmd
+fi
+
+# Replace this bash with a login shell
+# but only if we recognise the shell
+case $1 in 
+ /bin/sh* | /bin/bash* | /bin/pdksh* | /bin/tcsh* | /bin/zsh* )
+    echo Starting $1;
+    exec -l $1;;
+ * )
+    echo Do not recognise $1;;
+esac
