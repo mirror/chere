@@ -14,9 +14,14 @@
 # cmd and command terminals cannot cd to network paths like \\server\share.
 #
 # Dave Kilroy
-# Jan 2009
+# Nov 2011
 #
-VERSION=1.1
+VERSION=1.2
+#	Support 64-bit windows.
+#	Support for urxvt terminal.
+#	Support for dash shell.
+#	Support for mksh shell.
+#VERSION=1.1
 #	Add support for the posh shell
 #	Add support for the mintty terminal.
 #VERSION=1.0
@@ -131,7 +136,7 @@ print_help()
 	  s <shell> - Use the named shell. Supported shells are:
 	        $KNOWN_SHELLS
 
-	  d <display> - DISPLAY to use (xterm only). Defaults to :0.
+	  d <display> - DISPLAY to use (xterm, urxvt). Defaults to :0.
 	      Set to env to use the runtime environment variable.
 
 	  o <options> - Add <options> to the terminal startup command.
@@ -342,6 +347,9 @@ setup_for_term()
   rxvt )
 	TERM_EXE="/bin/rxvt.exe"
 	TERM_ARGS="$USER_TERM_OPTIONS";;
+  urxvt )
+	TERM_EXE="/bin/urxvt"
+	TERM_ARGS="-display $DISP $USER_TERM_OPTIONS";;
   mintty )
 	TERM_EXE="/bin/mintty.exe"
 	TERM_ARGS="$USER_TERM_OPTIONS"
@@ -421,6 +429,16 @@ setup_for_shell()
 	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
 	ACCEL="&Zsh Prompt Here"
 	CPH_DESC="Cygwin Zsh Prompt Here";;
+  dash )
+	SHELL_EXE="/bin/dash.exe"
+	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
+	ACCEL="&Dash Prompt Here"
+	CPH_DESC="Cygwin Dash Prompt Here";;
+  mksh )
+	SHELL_EXE="/bin/mksh.exe"
+	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
+	ACCEL="&Mksh Prompt Here"
+	CPH_DESC="Cygwin Mksh Prompt Here";;
   cmd )
 	case $VER in
 	CYGWIN_NT* )
@@ -816,11 +834,11 @@ uninstall()
 #########################################################################
 
 # Need to use eval to force correct quote evaluation
-REGTOOL="eval regtool"
-REGTOOL_=regtool
+REGTOOL="eval regtool -w"
+REGTOOL_="regtool -w"
 
-KNOWN_TERMS="cmd rxvt mintty xterm"
-KNOWN_SHELLS="ash bash cmd pdksh posh tcsh zsh passwd"
+KNOWN_TERMS="cmd rxvt mintty xterm urxvt"
+KNOWN_SHELLS="ash bash cmd dash mksh pdksh posh tcsh zsh passwd"
 
 ALL_USERS=unset
 ACTION=nothing
@@ -854,7 +872,7 @@ do
     c ) ALL_USERS=f;;
     n ) DO_WIN_UINST=t;;
     m ) DO_WIN_UINST=f;;
-    p ) REGTOOL="echo regtool"; PRINT=t;;
+    p ) REGTOOL="echo ${REGTOOL_}"; PRINT=t;;
     f ) FORCE=t;;
     1 ) METHOD=1;;
     2 ) METHOD=2;;

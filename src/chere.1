@@ -1,5 +1,5 @@
 
-.TH chere 1 "Jan 2009" "User Commands"
+.TH chere 1 "Noc 2011" "User Commands"
 .SH NAME
 chere \- manage Shell Here context menu items
 .SH SYNOPSIS
@@ -81,7 +81,7 @@ script. Relies on windows to change directory, and login scripts avoiding doing 
 .B $HOME 
 .TP
 .B \-\^d display
-Specifies the display to use if xterm is specified as the shell. Defaults to :0. If set to env, then the environment variable
+Specifies the display to use if xterm or urxvt is specified as the shell. Defaults to :0. If set to env, then the environment variable
 .B DISPLAY
 is read when the context menu item is selected.
 .TP
@@ -104,10 +104,10 @@ Help
 Version
 .PP
 Supported terminals:
-.B cmd rxvt mintty xterm
+.B cmd rxvt mintty xterm urxvt
 .PP
 Supported shells:
-.B ash bash cmd pdksh posh tcsh zsh passwd
+.B ash bash cmd dash mksh pdksh posh tcsh zsh passwd
 
 .SH USAGE
 .PP
@@ -328,4 +328,4 @@ Report bugs to <cygwin@cygwin.com>, following the directions in http://cygwin.co
 This script is in the public domain.
 
 .SH SEE ALSO
-.B ash bash pdksh posh tcsh zsh rxvt xterm regtool
+.B ash bash dash mksh pdksh posh tcsh zsh rxvt urxvt xterm regtool
