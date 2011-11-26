@@ -64,7 +64,7 @@ fi
 # Replace this bash with a login shell
 # but only if we recognise the shell
 case $1 in 
- /bin/sh* | /bin/bash* | /bin/pdksh* | /bin/tcsh* | /bin/zsh* )
+ /bin/sh* | /bin/bash* | /bin/pdksh* | /bin/posh* | /bin/tcsh* | /bin/zsh* )
     echo Starting $1;
     exec -l $1;;
  * )

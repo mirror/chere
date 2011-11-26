@@ -14,9 +14,12 @@
 # cmd and command terminals cannot cd to network paths like \\server\share.
 #
 # Dave Kilroy
-# Sept 2007
+# Jan 2009
 #
-VERSION=1.0
+VERSION=1.1
+#	Add support for the posh shell
+#	Add support for the mintty terminal.
+#VERSION=1.0
 #	Option to add to the terminal startup command.
 #	Option to specify context menu text.
 #	  Together these options allow you to add a context menu to start
@@ -339,6 +342,10 @@ setup_for_term()
   rxvt )
 	TERM_EXE="/bin/rxvt.exe"
 	TERM_ARGS="$USER_TERM_OPTIONS";;
+  mintty )
+	TERM_EXE="/bin/mintty.exe"
+	TERM_ARGS="$USER_TERM_OPTIONS"
+	RUN_EXE="";; # For some reason run.exe breaks mintty
   xterm )
 	TERM_EXE="/bin/xterm.exe"
 	TERM_ARGS="-display $DISP $USER_TERM_OPTIONS"
@@ -397,6 +404,11 @@ setup_for_shell()
 	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
 	ACCEL="&Pdksh Prompt Here"
 	CPH_DESC="Cygwin Pdksh Prompt Here";;
+  posh )
+	SHELL_EXE="/bin/posh.exe"
+	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
+	ACCEL="&Posh Prompt Here"
+	CPH_DESC="Cygwin Posh Prompt Here";;
   tcsh )
 	# Apparently -l only applies if it is the only argument
 	# so this may not work
@@ -807,8 +819,8 @@ uninstall()
 REGTOOL="eval regtool"
 REGTOOL_=regtool
 
-KNOWN_TERMS="cmd rxvt xterm"
-KNOWN_SHELLS="ash bash cmd pdksh tcsh zsh passwd"
+KNOWN_TERMS="cmd rxvt mintty xterm"
+KNOWN_SHELLS="ash bash cmd pdksh posh tcsh zsh passwd"
 
 ALL_USERS=unset
 ACTION=nothing
