@@ -1,7 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 #
 # This shell script manages Cygwin Prompt Here functionality.
-# Requires: regtool, uname, id, cygpath, getopt, bash, sed, wc
+# Requires: regtool, uname, id, cygpath, bash, sed, wc
 #
 # TODO
 # ----
@@ -14,9 +14,16 @@
 # cmd and command terminals cannot cd to network paths like \\server\share.
 #
 # Dave Kilroy
-# June 2007
+# Sept 2007
 #
-VERSION=0.8
+VERSION=1.0
+#	Option to add to the terminal startup command.
+#	Option to specify context menu text.
+#	  Together these options allow you to add a context menu to start
+#	  named terminals (that have different properties, configured in
+#	  .Xdefaults).
+#       Revert to using bash getopts to handle spaces in new options arguments.
+#VERSION=0.8
 #	Set path and DISPLAY for xterm
 #	  Thanks to Lewis Hyatt for pointing this out and Paul Mallas for
 #	  identifying the -display option.
@@ -90,6 +97,7 @@ print_help()
 
 	Usage:
 	$0 -<iuxlrhv> [-lracnmpf12] [-t <term>] [-s <shell>]
+	        [-d <display> ] [-o <options>] [-e <menutext>]
 
 	Adds the stated terminal/shell combination to the folder context menu
 	This allows you to right click a folder in Windows Explorer and open
@@ -111,16 +119,23 @@ print_help()
 	      tcsh or network shares.
 	  2 - Start via bash script. Relies on windows to change directory,
 	      and login scripts avoiding doing a cd $HOME 
-	  d - DISPLAY to use (xterm only). Defaults to :0.
-	      Set to env to use the runtime environment variable.
 	  h - Help
 	  v - Version
 
 	  t <term> - Use terminal term. Supported terminals are:
-		$KNOWN_TERMS
+	        $KNOWN_TERMS
 
 	  s <shell> - Use the named shell. Supported shells are:
-		$KNOWN_SHELLS
+	        $KNOWN_SHELLS
+
+	  d <display> - DISPLAY to use (xterm only). Defaults to :0.
+	      Set to env to use the runtime environment variable.
+
+	  o <options> - Add <options> to the terminal startup command.
+	      If more than one option is specified, they should all be
+	      contained within a single set of quotes.
+
+	  e <menutext> - Use <menutext> as the context menu text.
 
 	See the man page for more detail.
 EOF
@@ -135,7 +150,9 @@ check_requirements()
  # Quick check of common utilities (from sh-utils, cygwin, textutils packages)
  if [ ! -x /bin/uname ] || [ ! -x /bin/cygpath ] || [ ! -x /bin/id ] || [ ! -x /bin/wc ] || [ ! -x /bin/sed ] ; then
   echo $0 Error: uname / id / cygpath / wc / sed not found
-  echo These tools are required for correct operation. Aborting
+  echo
+  echo These tools are required for correct operation.
+  echo $0: Aborting
   exit
  fi
 
@@ -144,7 +161,7 @@ check_requirements()
   echo $0 Error: /bin/regtool not found
   echo
   echo You need regtool installed for this script to work.
-  echo Aborting.
+  echo $0: Aborting.
   exit
  fi
 
@@ -299,6 +316,7 @@ find_term_of_installed_shell()
 #  VER - OS version
 #  KNOWN_TERMS - list of known terminals
 #  DISP - display to use for xterm
+#  USER_TERM_OPTIONS - users custom options for terminal
 # Notes:
 #  Exits if term is not recognised
 setup_for_term()
@@ -316,12 +334,14 @@ setup_for_term()
 	 TERM_EXE=cmd.exe;;
 	* )
 	 TERM_EXE=command.com;;
-	esac;;
+	esac
+	TERM_ARGS="$USER_TERM_OPTIONS";;
   rxvt )
-	TERM_EXE="/bin/rxvt.exe";;
+	TERM_EXE="/bin/rxvt.exe"
+	TERM_ARGS="$USER_TERM_OPTIONS";;
   xterm )
 	TERM_EXE="/bin/xterm.exe"
-	TERM_ARGS="-display $DISP"
+	TERM_ARGS="-display $DISP $USER_TERM_OPTIONS"
 	RUN_ARGS="-p /usr/X11R6/bin";;
   * )
 	echo $0 Error: Unknown terminal $this_term
@@ -346,6 +366,7 @@ setup_for_term()
 #  VER - OS version
 #  FORCE - set to t to force installation of passwd in its absence
 #  KNOWN_SHELLS - list of known shells
+#  USER_MENU_TEXT - User specified menu text
 #
 # Notes:
 #  If shell is passwd, checks for the presence of /etc/passwd
@@ -441,6 +462,11 @@ setup_for_shell()
 	echo Use -h for help
 	exit;;
  esac
+
+ # Override standard accelerator if specified
+ if [ -n "$USER_MENU_TEXT" ] ; then
+  ACCEL="$USER_MENU_TEXT"
+ fi
 }
 
 # Builds the command to execute when the context menu item is selected
@@ -528,7 +554,7 @@ create_registry_key()
     # elem not present, so add it
     if ! $REGTOOL add $CUR_KEY ; then
      echo $0 Error: Hive not writable
-     echo Aborting.
+     echo $0: Aborting.
      exit
     fi
    fi
@@ -749,7 +775,7 @@ uninstall()
   if $REGTOOL_ check $drive/cygwin_$1/command 2> /dev/null; then
    if ! $REGTOOL remove $drive/cygwin_$1/command ; then
     echo $0 Error: Hive not writable.
-    echo Aborting.
+    echo $0: Aborting.
     exit
    fi
   fi
@@ -794,6 +820,8 @@ READ=f
 METHOD=2
 PRINT=f
 DISP=:0
+USER_TERM_OPTIONS=
+USER_MENU_TEXT=
 # Used to set an extra argument for Control Panel uninstall for current user
 UINST_ARG=""
 
@@ -802,28 +830,29 @@ this_term=cmd
 #this_shell=passwd
 
 ####################### Parse command line #######################
-GETOPTED_ARGS=`getopt -u -o iuxlracnmpf12hvt:s:d: -- $*`
-set -- $GETOPTED_ARGS
-for ARG; do
-  case $ARG in
-    -i ) shift; ACTION=i;;
-    -u ) shift; ACTION=u;;
-    -x ) shift; FORCE=t;FRESHEN=t;;
-    -l ) shift; LIST=t;;
-    -r ) shift; READ=t;;
-    -a ) shift; ALL_USERS=t;;
-    -c ) shift; ALL_USERS=f;;
-    -n ) shift; DO_WIN_UINST=t;;
-    -m ) shift; DO_WIN_UINST=f;;
-    -p ) shift; REGTOOL="echo regtool"; PRINT=t;;
-    -f ) shift; FORCE=t;;
-    -1 ) shift; METHOD=1;;
-    -2 ) shift; METHOD=2;;
-    -t ) shift; this_term=$1; shift;;
-    -s ) shift; this_shell=$1; shift;;
-    -d ) shift; DISP=$1; shift;;
-    -h ) shift; print_help; exit;;
-    -v ) shift; echo $0 version $VERSION; exit;;
+while getopts iuxlracnmpf12hvt:s:d:o:e: ARG
+do
+  case "$ARG" in
+    i ) ACTION=i;;
+    u ) ACTION=u;;
+    x ) FORCE=t;FRESHEN=t;;
+    l ) LIST=t;;
+    r ) READ=t;;
+    a ) ALL_USERS=t;;
+    c ) ALL_USERS=f;;
+    n ) DO_WIN_UINST=t;;
+    m ) DO_WIN_UINST=f;;
+    p ) REGTOOL="echo regtool"; PRINT=t;;
+    f ) FORCE=t;;
+    1 ) METHOD=1;;
+    2 ) METHOD=2;;
+    t ) this_term=$OPTARG;;
+    s ) this_shell=$OPTARG;;
+    d ) DISP=$OPTARG;;
+    o ) USER_TERM_OPTIONS="$OPTARG";;
+    e ) USER_MENU_TEXT="$OPTARG";;
+    \? | h ) print_help; exit;;
+    v ) echo $0 version $VERSION; exit;;
   esac
 done
 
@@ -836,6 +865,14 @@ if [ $DISP = env ]; then
 fi
 
 if [ $FRESHEN = t ]; then
+
+ # If the user has specified -e, abort since this is not right
+ if [ -n "$USER_MENU_TEXT" ]; then
+  echo "$0 error: You really don\'t want to freshen your existing entires,"
+  echo "          and set all the context menus to the same string of text."
+  echo $0: Aborting.
+  exit
+ fi
 
  # Do current user first so that we don't bail
  # if we don't have rights to HKCR
