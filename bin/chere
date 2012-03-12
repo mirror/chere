@@ -16,7 +16,9 @@
 # Dave Kilroy
 # Nov 2011
 #
-VERSION=1.2
+VERSION=1.3
+#	Adding Directory\Background action
+#VERSION=1.2
 #	Support 64-bit windows.
 #	Support for urxvt terminal.
 #	Support for dash shell.
@@ -216,8 +218,10 @@ get_system_info()
  # Note that the entry /HKCU/Software/Classes may not exist, and may need
  # to be created for the user.
  DIR_KEY_CR=/HKCR/Directory/Shell
+ DIR_BG_KEY_CR=/HKCR/Directory/Background/Shell
  DRIVE_KEY_CR=/HKCR/Drive/Shell
  DIR_KEY_CU=/HKCU/Software/Classes/Directory/Shell
+ DIR_BG_KEY_CU=/HKCU/Software/Classes/Directory/Background/Shell
  DRIVE_KEY_CU=/HKCU/Software/Classes/Drive/Shell
  UINST_KEY=/HKLM/Software/Microsoft/Windows/CurrentVersion/Uninstall
 }
@@ -244,11 +248,13 @@ set_for_user()
   # Set for install
   if [ $2 = f ]; then
    DIR_KEY=$DIR_KEY_CU
+   DIR_BG_KEY=$DIR_BG_KEY_CU
    DRIVE_KEY=$DRIVE_KEY_CU
    UINST_ARG="-c"
   else
    # all users is the default
    DIR_KEY=$DIR_KEY_CR
+   DIR_BG_KEY=$DIR_BG_KEY_CR
    DRIVE_KEY=$DRIVE_KEY_CR
   fi
  else
@@ -256,15 +262,15 @@ set_for_user()
   if [ $2 = t ]; then
    # Don't remove HKCU entries
    DRIVE_KEYS=$DRIVE_KEY_CR
-   DIR_KEYS=$DIR_KEY_CR
+   DIR_KEYS="$DIR_KEY_CR $DIR_BG_KEY_CR"
   elif [ $2 = f ]; then
    # Don't remove HKCR entries
    DRIVE_KEYS=$DRIVE_KEY_CU
-   DIR_KEYS=$DIR_KEY_CU
+   DIR_KEYS="$DIR_KEY_CU $DIR_BG_KEY_CU"
   else
    # Else remove both HKCR and HKCU entries
    DRIVE_KEYS="$DRIVE_KEY_CR $DRIVE_KEY_CU"
-   DIR_KEYS="$DIR_KEY_CR $DIR_KEY_CU"
+   DIR_KEYS="$DIR_KEY_CR $DIR_BG_KEY_CR $DIR_KEY_CU $DIR_BG_KEY_CU"
   fi
  fi
 }
@@ -555,10 +561,12 @@ build_start_cmd()
    fi
    if [ $2 != cmd ]; then
     SHELL_CMD="\\\"%L\\\""
+	SHELL_BG_CMD=""
    fi
   elif [ $2 != cmd ]; then
    START_CMD="`cygpath -w \"$BASH_EXE\"`"
    SHELL_CMD="-c \\\"$XHERE $SHELL_EXE '%L'\\\""
+   SHELL_BG_CMD="-c \\\"$XHERE $SHELL_EXE\\\""
   else
    # The command shell won't cd anywhere anyway
    START_CMD=$SHELL_EXE
@@ -689,7 +697,6 @@ list_cygwin_registry_keys()
 #  FORCE
 #  ACCEL
 #  START_CMD
-#  SHELL_CMD
 install_context_menu()
 {
  if [ $FORCE = t ] || ! $REGTOOL_ check $1 2> /dev/null ; then
@@ -698,11 +705,11 @@ install_context_menu()
 
   $REGTOOL -s set $1/ \"$ACCEL\"
   $REGTOOL add $1/command
-  $REGTOOL -e set $1/command/ \"$START_CMD $SHELL_CMD\"
+  $REGTOOL -e set $1/command/ \"$START_CMD $2\"
  else
   echo $0 Warning: Not overriding existing entry
   echo
-  echo Entry for $2 already exists in the Registry Drive Key
+  echo Entry for $3 already exists in the Registry Drive Key
   echo Use -f to override existing key.
   echo
  fi
@@ -751,7 +758,7 @@ create_uninstall_item()
 #  UINST_KEY
 install()
 {
-# local TERM_EXE SHELL_EXE SHELL_CMD START_CMD ACCEL CPH_DESC UINST_ARG
+# local TERM_EXE SHELL_EXE SHELL_CMD SHELL_BG_CMD START_CMD ACCEL CPH_DESC UINST_ARG
  setup_for_term  $1
  setup_for_shell $2
 
@@ -782,14 +789,15 @@ install()
  build_start_cmd $1 $2 $METHOD
 
  ####### Install ###########
- install_context_menu $DRIVE_KEY/cygwin_$2 $2
- install_context_menu $DIR_KEY/cygwin_$2 $2
+ install_context_menu $DRIVE_KEY/cygwin_$2 "$SHELL_CMD" $2
+ install_context_menu $DIR_KEY/cygwin_$2 "$SHELL_CMD" $2
+ install_context_menu $DIR_BG_KEY/cygwin_$2 "$SHELL_BG_CMD" $2
 
  if [ $DO_WIN_UINST = t ]; then
   create_uninstall_item $UINST_KEY/cygwin_$2 $2
  fi
 
- unset TERM_EXE SHELL_EXE SHELL_CMD START_CMD ACCEL CPH_DESC UINST_ARG
+ unset TERM_EXE SHELL_EXE SHELL_CMD SHELL_BG_CMD START_CMD ACCEL CPH_DESC UINST_ARG
 }
 
 # Arguments
