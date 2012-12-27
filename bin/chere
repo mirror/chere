@@ -17,6 +17,7 @@
 # Nov 2011
 #
 VERSION=1.3
+#	Adding icon
 #	Adding Directory\Background action
 #VERSION=1.2
 #	Support 64-bit windows.
@@ -573,7 +574,6 @@ build_start_cmd()
   fi
   unset XHERE
  fi
- unset TERM_WIN_EXE
 }
 
 # Create full path to registry key
@@ -704,6 +704,7 @@ install_context_menu()
   create_registry_key "$1"
 
   $REGTOOL -s set $1/ \"$ACCEL\"
+  $REGTOOL -s set $1/Icon \"$TERM_WIN_EXE,0\"
   $REGTOOL add $1/command
   $REGTOOL -e set $1/command/ \"$START_CMD $2\"
  else
