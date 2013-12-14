@@ -19,6 +19,8 @@
 VERSION=1.3
 #	Fix cmd opening a folder on a different drive (-1)
 #         Thanks to Jonathan Reeve and Andrey Repin
+#	Fix uninstall from Control Panel if cygwin not in path
+#	  Thanks to Christian Franke
 #VERSION=1.2
 #	Support 64-bit windows.
 #	Support for urxvt terminal.
@@ -728,7 +730,7 @@ create_uninstall_item()
   # even after the cygwin directory is wiped :(
   if $REGTOOL add $1 ; then
    $REGTOOL -s set $1/DisplayName \"$CPH_DESC\"
-   $REGTOOL -s set $1/UnInstallString \"$ASH_EXE -c \\\"/bin/chere $UINST_ARG -u -s $2\\\"\"
+   $REGTOOL -s set $1/UnInstallString \"$ASH_EXE -c \\\"PATH=/bin /bin/chere $UINST_ARG -u -s $2\\\"\"
   else
    echo $0 Error: Couldn\'t modify HKLM hive.
    echo Control Panel uninstall will not be available.
