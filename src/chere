@@ -17,6 +17,8 @@
 # Nov 2011
 #
 VERSION=1.3
+#	Fix cmd opening a folder on a different drive (-1)
+#         Thanks to Jonathan Reeve and Andrey Repin
 #VERSION=1.2
 #	Support 64-bit windows.
 #	Support for urxvt terminal.
@@ -444,7 +446,7 @@ setup_for_shell()
 	case $VER in
 	CYGWIN_NT* )
 	 SHELL_EXE=cmd.exe
-	 SHELL_CMD="/k cd %L";;
+	 SHELL_CMD="/k cd /d %L";;
 	* )
 	 SHELL_EXE=command.com
 	 SHELL_CMD="/k cd \\\"%1\\\"";;
