@@ -21,6 +21,7 @@ VERSION=1.3
 #         Thanks to Jonathan Reeve and Andrey Repin
 #	Fix uninstall from Control Panel if cygwin not in path
 #	  Thanks to Christian Franke
+#	Add Directory\Background context menu. - John Peterson
 #VERSION=1.2
 #	Support 64-bit windows.
 #	Support for urxvt terminal.
@@ -188,9 +189,13 @@ check_requirements()
 #  ASH_EXE - windows path to ash if present
 #  BASH_EXE - windows path to bash if present
 #  DIR_KEY_CU - Registry key for directory context menu for current user
+#  DIR_BG_KEY_CU - and the context menu for the directory background
 #  DRIVE_KEY_CU - Registry key for drive context menu for current user
+#  DRIVE_BG_KEY_CU - and the context menu for the drive background
 #  DIR_KEY_CR - Registry key for directory context menu for all users
+#  DIR_BG_KEY_CR - and the context menu for the directory background
 #  DRIVE_KEY_CR - Registry key for drive context menu for all users
+#  DRIVE_BG_KEY_CR - and the context menu for the drive background
 #  UINST_KEY - Registry key for uninstall information
 get_system_info()
 {
@@ -221,9 +226,13 @@ get_system_info()
  # Note that the entry /HKCU/Software/Classes may not exist, and may need
  # to be created for the user.
  DIR_KEY_CR=/HKCR/Directory/Shell
+ DIR_BG_KEY_CR=/HKCR/Directory/Background/Shell
  DRIVE_KEY_CR=/HKCR/Drive/Shell
+ DRIVE_BG_KEY_CR=/HKCR/Drive/Background/Shell
  DIR_KEY_CU=/HKCU/Software/Classes/Directory/Shell
+ DIR_BG_KEY_CU=/HKCU/Software/Classes/Directory/Background/Shell
  DRIVE_KEY_CU=/HKCU/Software/Classes/Drive/Shell
+ DRIVE_BG_KEY_CU=/HKCU/Software/Classes/Drive/Background/Shell
  UINST_KEY=/HKLM/Software/Microsoft/Windows/CurrentVersion/Uninstall
 }
 
@@ -234,42 +243,52 @@ get_system_info()
 #       Otherwise, set for current user.
 # Sets:
 #  DIR_KEY - Registry key for directory context menu
+#  DIR_BG_KEY - Registry key for the directory background context menu
 #  DRIVE_KEY - Registry key for drive context menu
+#  DRIVE_BG_KEY - Registry key for the drive background context menu
 #  DIR_KEYS - Registry keys to be removed (directory)
 #  DRIVE_KEYS - Registry keys to be removed (drive)
 #  UINST_ARG - Argument to pass to chere on uninstall
 # Refers to:
 #  DIR_KEY_CU - Registry key for directory context menu for current user
+#  DIR_BG_KEY_CU - and the context menu for the directory background
 #  DRIVE_KEY_CU - Registry key for drive context menu for current user
+#  DRIVE_BG_KEY_CU - and the context menu for the drive background
 #  DIR_KEY_CR - Registry key for directory context menu for all users
+#  DIR_BG_KEY_CR - and the context menu for the directory background
 #  DRIVE_KEY_CR - Registry key for drive context menu for all users
+#  DRIVE_BG_KEY_CR - and the context menu for the drive background
 set_for_user()
 {
  if [ $1 = i ]; then
   # Set for install
   if [ $2 = f ]; then
    DIR_KEY=$DIR_KEY_CU
+   DIR_BG_KEY=$DIR_BG_KEY_CU
    DRIVE_KEY=$DRIVE_KEY_CU
+   DRIVE_BG_KEY=$DRIVE_BG_KEY_CU
    UINST_ARG="-c"
   else
    # all users is the default
    DIR_KEY=$DIR_KEY_CR
+   DIR_BG_KEY=$DIR_BG_KEY_CR
    DRIVE_KEY=$DRIVE_KEY_CR
+   DRIVE_BG_KEY=$DRIVE_BG_KEY_CR
   fi
  else
   # Set for uninstall
   if [ $2 = t ]; then
    # Don't remove HKCU entries
-   DRIVE_KEYS=$DRIVE_KEY_CR
-   DIR_KEYS=$DIR_KEY_CR
+   DRIVE_KEYS="$DRIVE_KEY_CR $DRIVE_BG_KEY_CR"
+   DIR_KEYS="$DIR_KEY_CR $DIR_BG_KEY_CR"
   elif [ $2 = f ]; then
    # Don't remove HKCR entries
-   DRIVE_KEYS=$DRIVE_KEY_CU
-   DIR_KEYS=$DIR_KEY_CU
+   DRIVE_KEYS="$DRIVE_KEY_CU $DRIVE_BG_KEY_CU"
+   DIR_KEYS="$DIR_KEY_CU $DIR_BG_KEY_CU"
   else
    # Else remove both HKCR and HKCU entries
-   DRIVE_KEYS="$DRIVE_KEY_CR $DRIVE_KEY_CU"
-   DIR_KEYS="$DIR_KEY_CR $DIR_KEY_CU"
+   DRIVE_KEYS="$DRIVE_KEY_CR $DRIVE_KEY_CU $DRIVE_BG_KEY_CR $DRIVE_BG_KEY_CU"
+   DIR_KEYS="$DIR_KEY_CR $DIR_KEY_CU $DIR_BG_KEY_CR $DIR_BG_KEY_CU"
   fi
  fi
 }
@@ -513,6 +532,7 @@ setup_for_shell()
 #  START_CMD - command to execute
 #  SHELL_EXE - modified if this_shell is passwd and using method 2
 #  SHELL_CMD - cleared if using method 2
+#  SHELL_BG_CMD - command to use from background pane
 # Uses:
 #  RUN_EXE - location of run.exe if present
 #  RUN_ARGS - argument to pass to run.exe
@@ -560,10 +580,12 @@ build_start_cmd()
    fi
    if [ $2 != cmd ]; then
     SHELL_CMD="\\\"%L\\\""
+    SHELL_BG_CMD="\\\"%V\\\""
    fi
   elif [ $2 != cmd ]; then
    START_CMD="`cygpath -w \"$BASH_EXE\"`"
    SHELL_CMD="-c \\\"$XHERE $SHELL_EXE '%L'\\\""
+   SHELL_BG_CMD="-c \\\"$XHERE $SHELL_EXE '%V'\\\""
   else
    # The command shell won't cd anywhere anyway
    START_CMD=$SHELL_EXE
@@ -690,20 +712,19 @@ list_cygwin_registry_keys()
 # Arguments:
 #  $1 - Registry key to create
 #  $2 - Shell being installed
+#  $3 - Accelerator
+#  $4 - Command
 # Uses:
 #  FORCE
-#  ACCEL
-#  START_CMD
-#  SHELL_CMD
 install_context_menu()
 {
  if [ $FORCE = t ] || ! $REGTOOL_ check $1 2> /dev/null ; then
   # Make sure the registry key exists
   create_registry_key "$1"
 
-  $REGTOOL -s set $1/ \"$ACCEL\"
+  $REGTOOL -s set $1/ \"$3\"
   $REGTOOL add $1/command
-  $REGTOOL -e set $1/command/ \"$START_CMD $SHELL_CMD\"
+  $REGTOOL -e set $1/command/ \"$4\"
  else
   echo $0 Warning: Not overriding existing entry
   echo
@@ -754,6 +775,9 @@ create_uninstall_item()
 #  DRIVE_KEY
 #  DIR_KEY
 #  UINST_KEY
+#  ACCEL
+#  START_CMD
+#  SHELL_CMD
 install()
 {
 # local TERM_EXE SHELL_EXE SHELL_CMD START_CMD ACCEL CPH_DESC UINST_ARG
@@ -787,14 +811,20 @@ install()
  build_start_cmd $1 $2 $METHOD
 
  ####### Install ###########
- install_context_menu $DRIVE_KEY/cygwin_$2 $2
- install_context_menu $DIR_KEY/cygwin_$2 $2
+ install_context_menu $DRIVE_KEY/cygwin_$2 $2 "$ACCEL" "$START_CMD $SHELL_CMD"
+ install_context_menu $DIR_KEY/cygwin_$2 $2 "$ACCEL" "$START_CMD $SHELL_CMD"
+
+ # Background keys only work on Windows 7. Don't install on XP.
+ if [ $VER != "CYGWIN_NT-5.1" ] ; then
+   install_context_menu $DRIVE_BG_KEY/cygwin_$2 $2 "$ACCEL" "$START_CMD $SHELL_BG_CMD"
+   install_context_menu $DIR_BG_KEY/cygwin_$2 $2 "$ACCEL" "$START_CMD $SHELL_BG_CMD"
+ fi
 
  if [ $DO_WIN_UINST = t ]; then
   create_uninstall_item $UINST_KEY/cygwin_$2 $2
  fi
 
- unset TERM_EXE SHELL_EXE SHELL_CMD START_CMD ACCEL CPH_DESC UINST_ARG
+ unset TERM_EXE SHELL_EXE SHELL_CMD SHELL_BG_CMD START_CMD ACCEL CPH_DESC UINST_ARG
 }
 
 # Arguments
