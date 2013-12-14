@@ -1,0 +1,9 @@
+# Temporary files
+*~
+
+# Install directory structure
+usr/*
+bin/*
+
+# Packages
+*.tar.bz2
