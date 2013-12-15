@@ -467,7 +467,7 @@ setup_for_shell()
 	case $VER in
 	CYGWIN_NT* )
 	 SHELL_EXE=cmd.exe
-	 SHELL_CMD="/k cd /d %L";;
+	 SHELL_CMD="/k cd /d \\\"%L\\\"";;
 	* )
 	 SHELL_EXE=command.com
 	 SHELL_CMD="/k cd \\\"%1\\\"";;
