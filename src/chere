@@ -188,6 +188,7 @@ check_requirements()
 #  RUN_EXE - windows path to run.exe if present
 #  ASH_EXE - windows path to ash if present
 #  BASH_EXE - windows path to bash if present
+#  PFX - registry prefix to use for cygwin keys
 #  DIR_KEY_CU - Registry key for directory context menu for current user
 #  DIR_BG_KEY_CU - and the context menu for the directory background
 #  DRIVE_KEY_CU - Registry key for drive context menu for current user
@@ -205,6 +206,12 @@ get_system_info()
  RUN_EXE=""
  ASH_EXE=`cygpath -w /bin/sh`
  BASH_EXE=`cygpath -w /bin/bash`
+
+ if [ `uname -m` = "i686" ]; then
+   PFX=cygwin_
+ else
+   PFX=cygwin64_
+ fi
 
  if [ -x /bin/which ]; then
   # Enable prepending of run.exe if we can find it.
@@ -319,6 +326,7 @@ get_shell_from_passwd()
 #  $1 - shell
 # Uses:
 #  DIR_KEY - Registry base to find shell entry
+#  PFX - Registry prefix to use for cygwin keys
 find_term_of_installed_shell()
 {
 # local KEY_VALUE TERM_REGEXP
@@ -327,7 +335,7 @@ find_term_of_installed_shell()
  # construct the regexp of known terminals from KNOWN_TERMS
  # add command as well to pick up on 9x
  TERM_REGEXP=`echo $KNOWN_TERMS command | sed 's/ \+/\\\\|/g'`
- KEY_VALUE=`$REGTOOL_ get $DIR_KEY/cygwin_$1/command/ | sed "s/.*\($TERM_REGEXP\).*/\1/g"`
+ KEY_VALUE=`$REGTOOL_ get $DIR_KEY/$PFX$1/command/ | sed "s/.*\($TERM_REGEXP\).*/\1/g"`
 
  if [ "$KEY_VALUE" = "command" ]; then
   KEY_VALUE=cmd
@@ -649,6 +657,7 @@ remove_registry_key()
 #  DIR_KEY_CR - Registry key for directory context menu for all users
 #  DRIVE_KEY_CR - Registry key for drive context menu for all users
 #  UINST_KEY - Registry key for uninstall information
+#  PFX - Registry prefix to use for cygwin keys
 read_chere_registry_keys()
 {
 # local builtin is not available for sh (but is for ash and bash)
@@ -658,14 +667,14 @@ read_chere_registry_keys()
   #### Directory entries ####
   FOR_WHO="(all users)"
   for dir in $DIR_KEY_CR $DIR_KEY_CU ; do
-   if $REGTOOL_ check $dir/cygwin_$shell 2> /dev/null; then
+   if $REGTOOL_ check $dir/$PFX$shell 2> /dev/null; then
     echo Directory menu item $FOR_WHO
-    $REGTOOL get $dir/cygwin_$shell/
+    $REGTOOL get $dir/$PFX$shell/
     echo
    fi
-   if $REGTOOL_ check $dir/cygwin_$shell/command 2> /dev/null; then
+   if $REGTOOL_ check $dir/$PFX$shell/command 2> /dev/null; then
     echo Directory command $FOR_WHO
-    $REGTOOL get $dir/cygwin_$shell/command/
+    $REGTOOL get $dir/$PFX$shell/command/
     echo
    fi
    FOR_WHO="(current user)"
@@ -673,25 +682,25 @@ read_chere_registry_keys()
   #### Drive entries ####
   FOR_WHO="(all users)"
   for drive in $DRIVE_KEY_CR $DRIVE_KEY_CU ; do
-   if $REGTOOL_ check $drive/cygwin_$shell 2> /dev/null; then
+   if $REGTOOL_ check $drive/$PFX$shell 2> /dev/null; then
     echo Drive menu item $FOR_WHO
-    $REGTOOL get $drive/cygwin_$shell/
+    $REGTOOL get $drive/$PFX$shell/
     echo
    fi
-   if $REGTOOL_ check $drive/cygwin_$shell/command 2> /dev/null; then
+   if $REGTOOL_ check $drive/$PFX$shell/command 2> /dev/null; then
     echo Drive command $FOR_WHO
-    $REGTOOL get $drive/cygwin_$shell/command/
+    $REGTOOL get $drive/$PFX$shell/command/
     echo
    fi
    FOR_WHO="(current user)"
   done
   #### UnInstall entries ####
-  if $REGTOOL_ check $UINST_KEY/cygwin_$shell 2> /dev/null; then
+  if $REGTOOL_ check $UINST_KEY/$PFX$shell 2> /dev/null; then
     echo Uninstall description
-    $REGTOOL get $UINST_KEY/cygwin_$shell/DisplayName
+    $REGTOOL get $UINST_KEY/$PFX$shell/DisplayName
     echo
     echo Uninstall command
-    $REGTOOL get $UINST_KEY/cygwin_$shell/UnInstallString
+    $REGTOOL get $UINST_KEY/$PFX$shell/UnInstallString
     echo
   fi
   echo
@@ -703,9 +712,11 @@ read_chere_registry_keys()
 # Lists all cygwin items in given registry node to stdout
 # Parameters:
 #  $1 - Node to search
+# Uses:
+#  PFX - Registry prefix to use for cygwin keys
 list_cygwin_registry_keys()
 {
-  $REGTOOL_ list $1 2> /dev/null | sed -n 's/cygwin_\(.*\)/\1/gp'
+  $REGTOOL_ list $1 2> /dev/null | sed -n 's/$PFX\(.*\)/\1/gp'
 }
 
 # Install keys under $1 for shell $2
@@ -778,6 +789,7 @@ create_uninstall_item()
 #  ACCEL
 #  START_CMD
 #  SHELL_CMD
+#  PFX
 install()
 {
 # local TERM_EXE SHELL_EXE SHELL_CMD START_CMD ACCEL CPH_DESC UINST_ARG
@@ -811,17 +823,17 @@ install()
  build_start_cmd $1 $2 $METHOD
 
  ####### Install ###########
- install_context_menu $DRIVE_KEY/cygwin_$2 $2 "$ACCEL" "$START_CMD $SHELL_CMD"
- install_context_menu $DIR_KEY/cygwin_$2 $2 "$ACCEL" "$START_CMD $SHELL_CMD"
+ install_context_menu $DRIVE_KEY/$PFX$2 $2 "$ACCEL" "$START_CMD $SHELL_CMD"
+ install_context_menu $DIR_KEY/$PFX$2 $2 "$ACCEL" "$START_CMD $SHELL_CMD"
 
  # Background keys only work on Windows 7. Don't install on XP.
  if [ $VER != "CYGWIN_NT-5.1" ] ; then
-   install_context_menu $DRIVE_BG_KEY/cygwin_$2 $2 "$ACCEL" "$START_CMD $SHELL_BG_CMD"
-   install_context_menu $DIR_BG_KEY/cygwin_$2 $2 "$ACCEL" "$START_CMD $SHELL_BG_CMD"
+   install_context_menu $DRIVE_BG_KEY/$PFX$2 $2 "$ACCEL" "$START_CMD $SHELL_BG_CMD"
+   install_context_menu $DIR_BG_KEY/$PFX$2 $2 "$ACCEL" "$START_CMD $SHELL_BG_CMD"
  fi
 
  if [ $DO_WIN_UINST = t ]; then
-  create_uninstall_item $UINST_KEY/cygwin_$2 $2
+  create_uninstall_item $UINST_KEY/$PFX$2 $2
  fi
 
  unset TERM_EXE SHELL_EXE SHELL_CMD SHELL_BG_CMD START_CMD ACCEL CPH_DESC UINST_ARG
@@ -833,34 +845,35 @@ install()
 #  DRIVE_KEYS
 #  DIR_KEYS
 #  UINST_KEY
+#  PFX
 uninstall()
 {
  for drive in $DRIVE_KEYS ; do
   # Check each key exists before attempting to remove it
-  if $REGTOOL_ check $drive/cygwin_$1/command 2> /dev/null; then
-   if ! $REGTOOL remove $drive/cygwin_$1/command ; then
+  if $REGTOOL_ check $drive/$PFX$1/command 2> /dev/null; then
+   if ! $REGTOOL remove $drive/$PFX$1/command ; then
     echo $0 Error: Hive not writable.
     echo $0: Aborting.
     exit
    fi
   fi
 
-  if $REGTOOL_ check $drive/cygwin_$1 2> /dev/null; then
-   $REGTOOL remove $drive/cygwin_$1
+  if $REGTOOL_ check $drive/$PFX$1 2> /dev/null; then
+   $REGTOOL remove $drive/$PFX$1
   fi
  done
 
  for dir in $DIR_KEYS ; do
-  if $REGTOOL_ check $dir/cygwin_$1/command 2> /dev/null; then
-   $REGTOOL remove $dir/cygwin_$1/command
+  if $REGTOOL_ check $dir/$PFX$1/command 2> /dev/null; then
+   $REGTOOL remove $dir/$PFX$1/command
   fi
-  if $REGTOOL_ check $dir/cygwin_$1 2> /dev/null; then
-   $REGTOOL remove $dir/cygwin_$1
+  if $REGTOOL_ check $dir/$PFX$1 2> /dev/null; then
+   $REGTOOL remove $dir/$PFX$1
   fi
  done
 
- if $REGTOOL_ check $UINST_KEY/cygwin_$1 2> /dev/null; then
-  $REGTOOL remove $UINST_KEY/cygwin_$1
+ if $REGTOOL_ check $UINST_KEY/$PFX$1 2> /dev/null; then
+  $REGTOOL remove $UINST_KEY/$PFX$1
  fi
 }
 
