@@ -1,7 +1,7 @@
 
 .PHONY=all clean distclean help package
 PKG_NAME=chere
-MAIN_VER=1.3
+MAIN_VER=$(shell src/chere -v | sed "s/.*version //g")
 CYG_VER=1
 
 BIN_IPATH=bin
