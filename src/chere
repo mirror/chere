@@ -329,7 +329,7 @@ get_shell_from_passwd()
 #  PFX - Registry prefix to use for cygwin keys
 find_term_of_installed_shell()
 {
-# local KEY_VALUE TERM_REGEXP
+ local KEY_VALUE TERM_REGEXP
 
  # use sed to strip everything except known terminals
  # construct the regexp of known terminals from KNOWN_TERMS
@@ -341,8 +341,6 @@ find_term_of_installed_shell()
   KEY_VALUE=cmd
  fi
  echo $KEY_VALUE
- unset KEY_VALUE
- unset TERM_REGEXP
 }
 
 # Setup to install for a particular terminal
@@ -549,7 +547,7 @@ setup_for_shell()
 #  SHELL_EXE - location of shell executable
 build_start_cmd()
 {
-# local TERM_WIN_EXE XHERE
+ local TERM_WIN_EXE XHERE
  # TERM_EXE needs to be called by a windows path, even from run.exe
  TERM_WIN_EXE=`cygpath -w "$TERM_EXE"`
  if [ $3 = 1 ]; then
@@ -598,9 +596,7 @@ build_start_cmd()
    # The command shell won't cd anywhere anyway
    START_CMD=$SHELL_EXE
   fi
-  unset XHERE
  fi
- unset TERM_WIN_EXE
 }
 
 # Create full path to registry key
@@ -610,7 +606,7 @@ build_start_cmd()
 #  Exits if key cannot be created
 create_registry_key()
 {
-# local KEY_ELEMENTS CUR_KEY
+ local KEY_ELEMENTS CUR_KEY
   KEY_ELEMENTS=`echo $1 | sed "s?/? ?g"`
   CUR_KEY=
   for elem in $KEY_ELEMENTS; do
@@ -624,14 +620,13 @@ create_registry_key()
     fi
    fi
   done
-  unset KEY_ELEMENTS CUR_KEY
 }
 
 # Removes a key and any empty parents
 #  $1 - key to remove
 remove_registry_key()
 {
-# local CUR_KEY ENTRIES
+ local CUR_KEY ENTRIES
  CUR_KEY=$1
  if $REGTOOL_ check $CUR_KEY 2> /dev/null; then
   while [ -n "$CUR_KEY" ]; do
@@ -646,7 +641,6 @@ remove_registry_key()
    fi
   done
  fi
- unset CUR_KEY ENTRIES
 }
 
 # Print registry keys and values that chere knows about
@@ -660,8 +654,7 @@ remove_registry_key()
 #  PFX - Registry prefix to use for cygwin keys
 read_chere_registry_keys()
 {
-# local builtin is not available for sh (but is for ash and bash)
-# local FOR_WHO=""
+ local FOR_WHO=""
  for shell in $KNOWN_SHELLS; do
   echo --- $shell keys ---
   #### Directory entries ####
@@ -735,8 +728,6 @@ read_chere_registry_keys()
   fi
   echo
  done
- # Since local is not available...
- unset FOR_WHO
 }
 
 # Lists all cygwin items in given registry node to stdout
@@ -822,7 +813,7 @@ create_uninstall_item()
 #  PFX
 install()
 {
-# local TERM_EXE SHELL_EXE SHELL_CMD START_CMD ACCEL CPH_DESC UINST_ARG
+ local TERM_EXE SHELL_EXE SHELL_CMD SHELL_BG_CMD START_CMD ACCEL CPH_DESC UINST_ARG
  setup_for_term  $1
  setup_for_shell $2
 
@@ -865,8 +856,6 @@ install()
  if [ $DO_WIN_UINST = t ]; then
   create_uninstall_item $UINST_KEY/$PFX$2 $2
  fi
-
- unset TERM_EXE SHELL_EXE SHELL_CMD SHELL_BG_CMD START_CMD ACCEL CPH_DESC UINST_ARG
 }
 
 # Arguments
