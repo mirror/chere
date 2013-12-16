@@ -679,6 +679,21 @@ read_chere_registry_keys()
    fi
    FOR_WHO="(current user)"
   done
+  #### Directory background entries ####
+  FOR_WHO="(all users)"
+  for dir in $DIR_BG_KEY_CR $DIR_BG_KEY_CU ; do
+   if $REGTOOL_ check $dir/$PFX$shell 2> /dev/null; then
+    echo Directory background menu item $FOR_WHO
+    $REGTOOL get $dir/$PFX$shell/
+    echo
+   fi
+   if $REGTOOL_ check $dir/$PFX$shell/command 2> /dev/null; then
+    echo Directory background command $FOR_WHO
+    $REGTOOL get $dir/$PFX$shell/command/
+    echo
+   fi
+   FOR_WHO="(current user)"
+  done
   #### Drive entries ####
   FOR_WHO="(all users)"
   for drive in $DRIVE_KEY_CR $DRIVE_KEY_CU ; do
@@ -689,6 +704,21 @@ read_chere_registry_keys()
    fi
    if $REGTOOL_ check $drive/$PFX$shell/command 2> /dev/null; then
     echo Drive command $FOR_WHO
+    $REGTOOL get $drive/$PFX$shell/command/
+    echo
+   fi
+   FOR_WHO="(current user)"
+  done
+  #### Drive background entries ####
+  FOR_WHO="(all users)"
+  for drive in $DRIVE_BG_KEY_CR $DRIVE_BG_KEY_CU ; do
+   if $REGTOOL_ check $drive/$PFX$shell 2> /dev/null; then
+    echo Drive background menu item $FOR_WHO
+    $REGTOOL get $drive/$PFX$shell/
+    echo
+   fi
+   if $REGTOOL_ check $drive/$PFX$shell/command 2> /dev/null; then
+    echo Drive background command $FOR_WHO
     $REGTOOL get $drive/$PFX$shell/command/
     echo
    fi
