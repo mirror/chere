@@ -528,6 +528,13 @@ setup_for_shell()
 	exit;;
  esac
 
+ # Uninstall string should indicate 64 or 32 bit cygwin entry
+ if [ `uname -m` = "i686" ]; then
+  CPH_DESC+=" (x86)"
+ else
+  CPH_DESC+=" (x86_64)"
+ fi
+
  # Override standard accelerator if specified
  if [ -n "$USER_MENU_TEXT" ] ; then
   ACCEL="$USER_MENU_TEXT"
