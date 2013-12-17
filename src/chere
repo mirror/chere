@@ -469,6 +469,11 @@ setup_for_shell()
 	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
 	ACCEL="&Mksh Prompt Here"
 	CPH_DESC="Cygwin Mksh Prompt Here";;
+  fish )
+	SHELL_EXE="/bin/fish"
+	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
+	ACCEL="&Fish Prompt Here"
+	CPH_DESC="Cygwin Fish Prompt Here";;
   cmd )
 	case $VER in
 	CYGWIN_NT* )
@@ -905,7 +910,7 @@ REGTOOL="eval regtool -w"
 REGTOOL_="regtool -w"
 
 KNOWN_TERMS="cmd rxvt mintty xterm urxvt"
-KNOWN_SHELLS="ash bash cmd dash mksh pdksh posh tcsh zsh passwd"
+KNOWN_SHELLS="ash bash cmd dash fish mksh pdksh posh tcsh zsh passwd"
 
 ALL_USERS=unset
 ACTION=nothing
