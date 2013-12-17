@@ -2,4 +2,4 @@
 sdesc: "Cygwin Prompt Here context menus"
 ldesc: "Shell script to manage shell here context menus for Cygwin"
 category: Shells Utils System
-requires: cygwin coreutils util-linux bash run
+requires: cygwin coreutils bash run
