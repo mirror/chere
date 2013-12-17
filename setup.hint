@@ -1,5 +1,5 @@
 # chere
 sdesc: "Cygwin Prompt Here context menus"
 ldesc: "Shell script to manage shell here context menus for Cygwin"
-category: shells utils system
-requires: cygwin coreutils bash sed run
+category: Shells Utils System
+requires: cygwin coreutils util-linux bash run
