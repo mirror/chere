@@ -510,7 +510,7 @@ setup_for_shell()
 	 fi
 	fi;;
   * )
-	echo $0 Error: Unknown shell $this_shell
+	echo $0 Error: Unknown shell $1
 	echo
 	echo Supported shells:
 	echo $KNOWN_SHELLS
