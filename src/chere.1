@@ -1,5 +1,5 @@
 
-.TH chere 1 "Dec 2013" "User Commands"
+.TH chere 1 "Jan 2014" "User Commands"
 .SH NAME
 chere \- manage Shell Here context menu items
 .SH SYNOPSIS
@@ -19,7 +19,7 @@ chere \- manage Shell Here context menu items
 
 .SH DESCRIPTION
 .B chere
-adds the 
+adds the
 .I term
 /
 .I shell
@@ -78,7 +78,7 @@ Start shell using registry one-liners. This doesn\'t work with ash, tcsh or netw
 Start via
 .B bash
 script. Relies on windows to change directory, and login scripts avoiding doing a cd
-.B $HOME 
+.B $HOME
 .TP
 .B \-\^d display
 Specifies the display to use if xterm or urxvt is specified as the shell. Defaults to :0. If set to env, then the environment variable
@@ -221,7 +221,7 @@ or
 do not use it.
 Freshening does support the use of
 .B -o
-in the same invocation. It will abort if you attempt to specify the menu text entry with 
+in the same invocation. It will abort if you attempt to specify the menu text entry with
 .B -e.
 
 .SH DEBUGGING
@@ -259,7 +259,7 @@ can\'t be found
 .IP
 \&./chere -il -t rxvt -s tcsh
 .PP
-Install 
+Install
 .B tcsh,
 for all users using
 .B rxvt
@@ -269,7 +269,7 @@ as the terminal, then list what is installed.
 If you have an old or custom startup script, the shell may not enter the desired directory. The login script modifications described above are provided in the default startup scripts; the cygwin setup program attempts to merge updates in these scripts to your local login scripts, but this may not work. The default startup scripts can be found at:
 .PP
 .B /etc/defaults/etc/profile
-(provided by base-files, used by 
+(provided by base-files, used by
 .B ash,
 .B bash
 and
@@ -297,7 +297,7 @@ you can still use it as a shell in
 or
 .B xterm.
 .PP
-Use 
+Use
 .B ~/.Xdefaults
 to set terminal resources (colour, font etc). This even works for rxvt in non-X11 mode.
 .PP
