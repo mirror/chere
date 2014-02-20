@@ -300,25 +300,12 @@ set_for_user()
  fi
 }
 
-# Sets this_shell, based on current users passwd entry
-# Sets:
-#  this_shell - shell to install
+# Returns users shell, based on their passwd entry
 # Uses:
 #  ID_USER - current user
-# Notes:
-#  Exits if /etc/passwd not found
 get_shell_from_passwd()
 {
- if [ -f /etc/passwd ]; then
-  this_shell=`sed -n "s?$ID_USER:.*:/bin/\(.*\)?\1?gp" /etc/passwd`
-  echo Shell defaulting to $this_shell defined for $ID_USER
- else
-  echo $0 Error: No shell specified, and /etc/passwd not present
-  echo
-  echo Can\'t guess what shell you want.
-  echo Use -s to specify the shell.
-  exit
- fi
+ getent passwd $ID_USER | sed -n "s?.*:/bin/\(.*\)?\1?gp"
 }
 
 # Identifies the terminal installed for the named shell
@@ -412,6 +399,7 @@ setup_for_term()
 #  FORCE - set to t to force installation of passwd in its absence
 #  KNOWN_SHELLS - list of known shells
 #  USER_MENU_TEXT - User specified menu text
+#  ID_USER - current user
 #
 # Notes:
 #  If shell is passwd, checks for the presence of /etc/passwd
@@ -419,6 +407,8 @@ setup_for_term()
 #  Exits if shell is not recognised
 setup_for_shell()
 {
+ local ge_shell
+
  #################### Define shells #############################
  # For each shell, specify:
  # the location of the executable to be checked on install
@@ -489,31 +479,32 @@ setup_for_shell()
 	# Experimental
 	SHELL_EXE="/bin/sh"
 	# Quoting nightmare. Step through it all
-	# c:\cygwin\bin\sh -c "scmd=`sed -n \"s?\`id -un\`:.*:\\\(.*\\\)?\\\1?gp\" /etc/passwd`; $scmd -l -c \"cd 'c:/program files'; exec $scmd\""
+	# c:\cygwin\bin\sh -c "scmd=`getent passwd \`id -un\` | sed -n \"s?.*:\\\(.*\\\)?\\\1?gp\"`; $scmd -l -c \"cd 'c:/program files'; exec $scmd\""
 	# works from the command line
 	# In registry it needs to read the same:
-	# c:\cygwin\bin\sh -c "scmd=`sed -n \"s?\`id -un\`:.*:\\\(.*\\\)?\\\1?gp\" /etc/passwd`; $scmd -l -c \"cd '%1'; exec $scmd\""
+	# c:\cygwin\bin\sh -c "scmd=`getent passwd \`id -un\` | sed -n \"s?.*:\\\(.*\\\)?\\\1?gp\"`; $scmd -l -c \"cd '%L'; exec $scmd\""
 	# When passed to regtool, need to requote for the shell:
-	# "c:\cygwin\bin\sh -c \"scmd=\`sed -n \\\"s?\\\`id -un\\\`:.*:\\\\\\(.*\\\\\\)?\\\\\\1?gp\\\" /etc/passwd\`; \$scmd -l -c \\\"cd '%1'; exec \$scmd\\\"\""
+	# "c:\cygwin\bin\sh -c \"scmd=\`getent passwd \\\`id -un\\\` | sed -n \\\"s?.*:\\\\\\(.*\\\\\\)?\\\\\\1?gp\\\"\`; \$scmd -l -c \\\"cd '%L'; exec \$scmd\\\"\""
 	# When evaluated into a variable, need another level of quoting:
-	# "c:\cygwin\bin\sh -c \\\"scmd=\\\`sed -n \\\\\\\"s?\\\\\\\`id -un\\\\\\\`:.*:\\\\\\\\\\\\(.*\\\\\\\\\\\\)?\\\\\\\\\\\\1?gp\\\\\\\" /etc/passwd\\\`; \\\$scmd -l -c \\\\\\\"cd '%1'; exec \\\$scmd\\\\\\\"\\\""
+	# "c:\cygwin\bin\sh -c \\\"scmd=\\\`getent passwd \\\\\\\`id -un\\\\\\\` | sed -n \\\\\\\"s?.*:\\\\\\\\\\\\(.*\\\\\\\\\\\\)?\\\\\\\\\\\\1?gp\\\\\\\"\\\`; \\\$scmd -l -c \\\\\\\"cd '%L'; exec \\\$scmd\\\\\\\"\\\""
 	# Ouch. If you think it can be quoted better, let me know.
-	SHELL_CMD="-c \\\"scmd=\\\`sed -n \\\\\\\"s?\\\\\\\`id -un\\\\\\\`:.*:\\\\\\\\\\\\(.*\\\\\\\\\\\\)?\\\\\\\\\\\\1?gp\\\\\\\" /etc/passwd\\\`; \\\$scmd -l -c \\\\\\\"cd '%L'; exec \\\$scmd\\\\\\\"\\\""
+	SHELL_CMD="-c \\\"scmd=\\\`getent passwd \\\\\\\`id -un\\\\\\\` | sed -n \\\\\\\"s?.*:\\\\\\\\\\\\(.*\\\\\\\\\\\\)?\\\\\\\\\\\\1?gp\\\\\\\"\\\`; \\\$scmd -l -c \\\\\\\"cd '%L'; exec \\\$scmd\\\\\\\"\\\""
 	ACCEL="Shell Prompt &Here"
 	CPH_DESC="Cygwin Prompt Here"
 
 	# Extra check before installing passwd
-	if [ ! -f /etc/passwd ]; then
+	ge_shell=`get_shell_from_passwd`
+	if [ -z "$ge_shell" ]; then
 	 if [ $FORCE = t ]; then
-	  echo $0 Warning: /etc/passwd not found
+	  echo $0 Warning: login shell has not been set for user $ID_USER
 	  echo
-	  echo This file is required for the runtime context menu item to work.
-	  echo Run mkpasswd
+	  echo This is required for the runtime context menu item to work.
+	  echo See cygwin documentation on how to set the login shell.
 	 else
-	  echo $0 Error: /etc/passwd not found
+	  echo $0 Error: login shell has not been set for user $ID_USER
 	  echo
-	  echo This file is required for the runtime context menu item to work.
-	  echo Run mkpasswd to initialise the file.
+	  echo This is required for the runtime context menu item to work.
+	  echo See cygwin documentation on how to set the login shell.
 	  echo Use -f to install anyway.
 	  exit
 	 fi
@@ -1003,7 +994,16 @@ elif [ $ACTION = i ]; then
  # If no shell specified at this stage,
  # grab one from /etc/passwd if it is present
  if [ ! $this_shell ]; then
-  get_shell_from_passwd
+  this_shell=`get_shell_from_passwd`
+  if [ -n "$this_shell" ] ; then
+   echo Shell defaulting to $this_shell defined for $ID_USER
+  else
+   echo $0 Error: No shell specified, and passwd entry could not be read
+   echo
+   echo Can\'t guess what shell you want.
+   echo Use -s to specify the shell.
+   exit
+  fi
  fi
 
  install $this_term $this_shell

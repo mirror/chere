@@ -141,9 +141,7 @@ The context menu may be (un)installed for all users
 To (un)install for all users, you will require appropriate access rights. i.e. you need to have Administrator rights.
 
 .PP
-If the -i flag is passed without specifying a shell, the shell specified in
-.B /etc/passwd
-for the current user is added. If
+If the -i flag is passed without specifying a shell, the login shell specified for the current user is added. If
 .B term
 is not specified,
 .B cmd
@@ -162,11 +160,13 @@ is also specified, only the context menus for the specified users are uninstalle
 It is not possible to uninstall a context menu for a user who is not the current user.
 
 .PP
-The 
+When
 .B passwd
-shell tries to determine your preferred shell at runtime from your
+is specified as the shell, chere tries to determine your preferred shell at runtime from either the users
 .B /etc/passwd
-entry. This is most useful on multi-user systems.
+entry, the loginShell Active Directory attribute, or the comment field of the local Security Account Manage (SAM). See cygwin documentation for more details. The
+.B passwd
+option is most useful on multi-user systems.
 
 .PP
 By default, registry entries are added so that the context menus can be removed using the Add Remove Programs utility in the Windows Control Panel. The
