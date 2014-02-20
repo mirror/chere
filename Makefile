@@ -1,5 +1,5 @@
 
-.PHONY=all clean distclean help package
+.PHONY=all clean distclean help package upload upload_x86 upload_x86_64
 PKG_NAME=chere
 MAIN_VER=$(shell src/chere -v | sed "s/.*version //g")
 CYG_VER=1
@@ -28,7 +28,13 @@ help:
 	@echo Targets:
 	@echo  all distclean clean help package 
 
-package : clean $(PKG_NAME)-$(MAIN_VER)-$(CYG_VER).tar.bz2
+TARBALL:=$(PKG_NAME)-$(MAIN_VER)-$(CYG_VER).tar.bz2
+package : clean $(TARBALL)
+
+upload_% : package
+	lftp -c "open -u cygwin, sftp://cygwin.com/; cd $*/release/$(PKG_NAME); put $(TARBALL); put setup.hint; put /dev/null -o !ready"
+
+upload : upload_x86 upload_x86_64
 
 %.tar.bz2 : $(INSTALL_ITEMS)
 	tar -cjf $@ $^
