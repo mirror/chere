@@ -8,7 +8,9 @@
 # Dave Kilroy
 # Nov 2011
 #
-VERSION=1.2
+VERSION=1.4
+# HISTORY PRIOR TO GIT
+#VERSION=1.2
 # Add support for dash
 # Add support for mksh
 #VERSION=0.7
