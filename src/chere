@@ -418,50 +418,50 @@ setup_for_shell()
  case $1 in
   bash )
 	SHELL_EXE="/bin/bash.exe"
-	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
+	SHELL_CMD="-l -c \\\"cd \\\\\\\"%L\\\\\\\"; exec $SHELL_EXE\\\""
 	ACCEL="&Bash Prompt Here"
 	CPH_DESC="Cygwin Bash Prompt Here";;
   ash )
 	# TODO How to make this a login shell? Is -l undocumented?
 	SHELL_EXE="/bin/sh.exe"
-	SHELL_CMD="-c \\\"cd '%L'; exec $SHELL_EXE\\\"";
+	SHELL_CMD="-c \\\"cd \\\\\\\"%L\\\\\\\"; exec $SHELL_EXE\\\"";
 	ACCEL="&Ash Prompt Here"
 	CPH_DESC="Cygwin Ash Prompt Here";;
   pdksh )
 	SHELL_EXE="/bin/pdksh.exe"
-	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
+	SHELL_CMD="-l -c \\\"cd \\\\\\\"%L\\\\\\\"; exec $SHELL_EXE\\\""
 	ACCEL="&Pdksh Prompt Here"
 	CPH_DESC="Cygwin Pdksh Prompt Here";;
   posh )
 	SHELL_EXE="/bin/posh.exe"
-	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
+	SHELL_CMD="-l -c \\\"cd \\\\\\\"%L\\\\\\\"; exec $SHELL_EXE\\\""
 	ACCEL="&Posh Prompt Here"
 	CPH_DESC="Cygwin Posh Prompt Here";;
   tcsh )
 	# Apparently -l only applies if it is the only argument
 	# so this may not work
 	SHELL_EXE="/bin/tcsh.exe"
-	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
+	SHELL_CMD="-l -c \\\"cd \\\\\\\"%L\\\\\\\"; exec $SHELL_EXE\\\""
 	ACCEL="&Tcsh Prompt Here"
 	CPH_DESC="Cygwin Tcsh Prompt Here";;
   zsh )
 	SHELL_EXE="/bin/zsh.exe"
-	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
+	SHELL_CMD="-l -c \\\"cd \\\\\\\"%L\\\\\\\"; exec $SHELL_EXE\\\""
 	ACCEL="&Zsh Prompt Here"
 	CPH_DESC="Cygwin Zsh Prompt Here";;
   dash )
 	SHELL_EXE="/bin/dash.exe"
-	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
+	SHELL_CMD="-l -c \\\"cd \\\\\\\"%L\\\\\\\"; exec $SHELL_EXE\\\""
 	ACCEL="&Dash Prompt Here"
 	CPH_DESC="Cygwin Dash Prompt Here";;
   mksh )
 	SHELL_EXE="/bin/mksh.exe"
-	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
+	SHELL_CMD="-l -c \\\"cd \\\\\\\"%L\\\\\\\"; exec $SHELL_EXE\\\""
 	ACCEL="&Mksh Prompt Here"
 	CPH_DESC="Cygwin Mksh Prompt Here";;
   fish )
 	SHELL_EXE="/bin/fish"
-	SHELL_CMD="-l -c \\\"cd '%L'; exec $SHELL_EXE\\\""
+	SHELL_CMD="-l -c \\\"cd \\\\\\\"%L\\\\\\\"; exec $SHELL_EXE\\\""
 	ACCEL="&Fish Prompt Here"
 	CPH_DESC="Cygwin Fish Prompt Here";;
   cmd )
@@ -479,16 +479,16 @@ setup_for_shell()
 	# Experimental
 	SHELL_EXE="/bin/sh"
 	# Quoting nightmare. Step through it all
-	# c:\cygwin\bin\sh -c "scmd=`getent passwd \`id -un\` | sed -n \"s?.*:\\\(.*\\\)?\\\1?gp\"`; $scmd -l -c \"cd 'c:/program files'; exec $scmd\""
+	# c:\cygwin\bin\sh -c "scmd=`getent passwd \`id -un\` | sed -n \"s?.*:\\\(.*\\\)?\\\1?gp\"`; $scmd -l -c \"cd \\\"c:/program files\\\"; exec $scmd\""
 	# works from the command line
 	# In registry it needs to read the same:
-	# c:\cygwin\bin\sh -c "scmd=`getent passwd \`id -un\` | sed -n \"s?.*:\\\(.*\\\)?\\\1?gp\"`; $scmd -l -c \"cd '%L'; exec $scmd\""
+	# c:\cygwin\bin\sh -c "scmd=`getent passwd \`id -un\` | sed -n \"s?.*:\\\(.*\\\)?\\\1?gp\"`; $scmd -l -c \"cd \\\"%L\\\"; exec $scmd\""
 	# When passed to regtool, need to requote for the shell:
-	# "c:\cygwin\bin\sh -c \"scmd=\`getent passwd \\\`id -un\\\` | sed -n \\\"s?.*:\\\\\\(.*\\\\\\)?\\\\\\1?gp\\\"\`; \$scmd -l -c \\\"cd '%L'; exec \$scmd\\\"\""
+	# "c:\cygwin\bin\sh -c \"scmd=\`getent passwd \\\`id -un\\\` | sed -n \\\"s?.*:\\\\\\(.*\\\\\\)?\\\\\\1?gp\\\"\`; \$scmd -l -c \\\"cd \\\\\\\"%L\\\\\\\"; exec \$scmd\\\"\""
 	# When evaluated into a variable, need another level of quoting:
-	# "c:\cygwin\bin\sh -c \\\"scmd=\\\`getent passwd \\\\\\\`id -un\\\\\\\` | sed -n \\\\\\\"s?.*:\\\\\\\\\\\\(.*\\\\\\\\\\\\)?\\\\\\\\\\\\1?gp\\\\\\\"\\\`; \\\$scmd -l -c \\\\\\\"cd '%L'; exec \\\$scmd\\\\\\\"\\\""
+	# "c:\cygwin\bin\sh -c \\\"scmd=\\\`getent passwd \\\\\\\`id -un\\\\\\\` | sed -n \\\\\\\"s?.*:\\\\\\\\\\\\(.*\\\\\\\\\\\\)?\\\\\\\\\\\\1?gp\\\\\\\"\\\`; \\\$scmd -l -c \\\\\\\"cd \\\\\\\\\\\\\\\"%L\\\\\\\\\\\\\\\"; exec \\\$scmd\\\\\\\"\\\""
 	# Ouch. If you think it can be quoted better, let me know.
-	SHELL_CMD="-c \\\"scmd=\\\`getent passwd \\\\\\\`id -un\\\\\\\` | sed -n \\\\\\\"s?.*:\\\\\\\\\\\\(.*\\\\\\\\\\\\)?\\\\\\\\\\\\1?gp\\\\\\\"\\\`; \\\$scmd -l -c \\\\\\\"cd '%L'; exec \\\$scmd\\\\\\\"\\\""
+	SHELL_CMD="-c \\\"scmd=\\\`getent passwd \\\\\\\`id -un\\\\\\\` | sed -n \\\\\\\"s?.*:\\\\\\\\\\\\(.*\\\\\\\\\\\\)?\\\\\\\\\\\\1?gp\\\\\\\"\\\`; \\\$scmd -l -c \\\\\\\"cd \\\\\\\\\\\\\\\"%L\\\\\\\\\\\\\\\"; exec \\\$scmd\\\\\\\"\\\""
 	ACCEL="Shell Prompt &Here"
 	CPH_DESC="Cygwin Prompt Here"
 
